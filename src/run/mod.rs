@@ -62,7 +62,7 @@ pub fn stage() -> AdHoc {
                             "Default language not in 'run.languages', using first language: {}",
                             k
                         );
-                        config.default_language = k.clone();
+                        config.default_language.clone_from(k);
                     } else {
                         error!("No languages found in config key 'run.languages'");
                         return Err(rocket);
