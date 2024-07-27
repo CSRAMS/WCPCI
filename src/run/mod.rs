@@ -11,8 +11,10 @@ use self::manager::RunManager;
 
 mod job;
 mod languages;
+//mod lockdown;
 mod manager;
 mod runner;
+mod worker;
 mod ws;
 
 pub type JobStateMessage = job::JobState;
@@ -24,6 +26,7 @@ pub type ManagerHandle = Arc<Mutex<RunManager>>;
 
 pub use job::JobState;
 pub use languages::RunConfig;
+pub use worker::{Worker, WorkerMessage};
 
 pub struct CodeInfo {
     pub run_config: RunConfig,

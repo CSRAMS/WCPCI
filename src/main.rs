@@ -1,5 +1,6 @@
-use rocket::{get, launch, routes};
+use rocket::{get, routes, Build};
 use rocket_dyn_templates::Template;
+use run::WorkerMessage;
 
 #[macro_use]
 extern crate rocket_dyn_templates;
@@ -42,8 +43,27 @@ async fn md_help(user: Option<&User>) -> Template {
     Template::render("md_help", ctx)
 }
 
-#[launch]
-fn rocket() -> _ {
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+    let args = std::env::args().collect::<Vec<_>>();
+
+    if args.contains(&"--worker".to_string()) {
+        eprintln!("Starting worker ({})...", env!("CARGO_PKG_VERSION"));
+        let res = run::Worker::run_from_child().await;
+        if let Err(why) = res {
+            let msg = WorkerMessage::Failed(format!("{:?}", why));
+            let msg = serde_json::to_string(&msg).unwrap();
+            println!("{}", msg);
+            std::process::exit(1);
+        }
+    } else {
+        rocket().ignite().await?.launch().await?;
+    }
+
+    Ok(())
+}
+
+fn rocket() -> rocket::Rocket<Build> {
     if cfg!(debug_assertions) {
         println!("Loading .dev.env...");
         dotenvy::from_filename(".dev.env").ok();

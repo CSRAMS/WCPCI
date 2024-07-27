@@ -2,22 +2,22 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(crate = "rocket::serde")]
 /// Specifies a configuration for a language.
 pub struct LanguageConfig {
     /// Name of the language
     pub name: String,
-    #[serde(rename(serialize = "tablerIcon"))]
+    #[serde(rename = "tablerIcon", alias = "tabler_icon")]
     /// Name of the icon for the language in [tabler icons](https://tabler.io/icons)
     pub tabler_icon: String,
-    #[serde(rename(serialize = "monacoContribution"))]
+    #[serde(rename = "monacoContribution", alias = "monaco_contribution")]
     /// Name of the monaco contribution for the language
     pub monaco_contribution: String,
-    #[serde(rename(serialize = "defaultCode"))]
+    #[serde(rename = "defaultCode", alias = "default_code")]
     /// Default code to show in the editor
     pub default_code: String,
-    #[serde(rename(serialize = "fileName"))]
+    #[serde(rename = "fileName", alias = "file_name")]
     /// Name of the file to save user submitted code to
     pub file_name: String,
     /// Command to compile the program.

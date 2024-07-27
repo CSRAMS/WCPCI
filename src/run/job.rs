@@ -1,21 +1,25 @@
+use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use log::{error, info};
 
-use crate::{problems::TestCase, run::runner::CaseError};
-
-use super::{
-    languages::LanguageConfig, manager::ShutdownReceiver, runner::Runner, JobStateReceiver,
-    JobStateSender,
+use crate::{
+    error::prelude::*,
+    problems::TestCase,
+    run::{runner::CaseError, worker::WorkerMessage},
 };
 
-#[derive(Debug, Clone, Serialize, Default)]
+use super::{languages::LanguageConfig, manager::ShutdownReceiver, runner::Runner};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(tag = "status", content = "content", rename_all = "camelCase")]
 pub enum CaseStatus {
     #[default]
     Pending,
     Running,
+    // Passed, optional output
     Passed(Option<String>),
     NotRun,
+    // Penalty, Error
     Failed(bool, String),
 }
 
@@ -31,7 +35,7 @@ impl CaseStatus {
     }
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum JobState {
     Judging {
@@ -54,6 +58,13 @@ impl JobState {
     pub fn new_testing() -> Self {
         Self::Testing {
             status: CaseStatus::Pending,
+        }
+    }
+
+    pub fn new_for_op(op: &JobOperation) -> Self {
+        match op {
+            JobOperation::Judging(cases) => Self::new_judging(cases.len()),
+            JobOperation::Testing(_) => Self::new_testing(),
         }
     }
 
@@ -108,6 +119,22 @@ impl JobState {
         }
     }
 
+    pub fn force_fail(&mut self, msg: &str) {
+        let msg = msg.to_string();
+        match self {
+            Self::Judging { cases, .. } => {
+                let idx = cases
+                    .iter()
+                    .position(|c| matches!(c, CaseStatus::Running))
+                    .unwrap_or(0);
+                self.complete_case(idx, CaseStatus::Failed(false, msg));
+            }
+            Self::Testing { status } => {
+                *status = CaseStatus::Failed(true, msg);
+            }
+        }
+    }
+
     pub fn complete_case(&mut self, idx: usize, status: CaseStatus) {
         match self {
             Self::Judging { cases, complete } => {
@@ -131,17 +158,21 @@ impl JobState {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JobOperation {
     Judging(Vec<TestCase>),
     Testing(String),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobRequest {
+    pub id: u64,
     pub user_id: i64,
     pub contest_id: i64,
     pub problem_id: i64,
     pub program: String,
-    pub language: String,
+    pub language_key: String,
+    pub language: LanguageConfig,
     pub cpu_time: i64,
     pub op: JobOperation,
 }
@@ -152,54 +183,48 @@ pub struct Job {
     runner: Runner,
     op: JobOperation,
     pub state: JobState,
-    state_tx: JobStateSender,
     started_at: NaiveDateTime,
     shutdown_rx: ShutdownReceiver,
 }
 
 impl Job {
-    pub async fn new(
-        id: u64,
-        request: JobRequest,
-        shutdown_rx: ShutdownReceiver,
-        config: &LanguageConfig,
-    ) -> Result<(Self, JobStateReceiver), String> {
+    pub async fn new(request: JobRequest, shutdown_rx: ShutdownReceiver) -> Result<Self> {
         let mut state = match request.op {
             JobOperation::Judging(ref cases) => JobState::new_judging(cases.len()),
             JobOperation::Testing(_) => JobState::new_testing(),
         };
 
         let res = Runner::new(
-            id,
-            &config.compile_cmd,
-            &config.run_cmd,
-            &config.file_name,
+            request.id,
+            &request.language.compile_cmd,
+            &request.language.run_cmd,
+            &request.language.file_name,
             &request.program,
             request.cpu_time,
             shutdown_rx.clone(),
         )
         .await;
+
         match res {
             Ok(runner) => {
-                info!("Job {} Runner created", id);
-                let (state_tx, state_rx) = tokio::sync::watch::channel(state.clone());
-                Ok((
-                    Self {
-                        id,
-                        runner,
-                        state,
-                        state_tx,
-                        user_id: request.user_id,
-                        op: request.op,
-                        started_at: chrono::offset::Utc::now().naive_utc(),
-                        shutdown_rx,
-                    },
-                    state_rx,
-                ))
+                info!("Job {} Runner created", request.id);
+                Ok(Self {
+                    id: request.id,
+                    runner,
+                    state,
+                    user_id: request.user_id,
+                    op: request.op,
+                    started_at: chrono::offset::Utc::now().naive_utc(),
+                    shutdown_rx,
+                })
             }
             Err(e) => {
                 state.complete_case(0, e.clone().into());
-                Err(format!("Job {} Couldn't create runner: {:?}", id, e))
+                Err(anyhow!(
+                    "Job {} Couldn't create runner: {:?}",
+                    request.id,
+                    e
+                ))
             }
         }
     }
@@ -300,9 +325,8 @@ impl Job {
     }
 
     pub fn publish_state(&self) {
-        let res = self.state_tx.send(self.state.clone());
-        if let Err(why) = res {
-            error!("Job {} Couldn't send job state: {:?}", self.id, why);
-        }
+        let msg = WorkerMessage::StateChange(self.state.clone());
+        let state_str = serde_json::to_string(&msg).unwrap();
+        println!("{}", state_str);
     }
 }

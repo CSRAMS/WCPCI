@@ -12,10 +12,10 @@ use crate::error::prelude::*;
 use crate::leaderboard::LeaderboardManagerHandle;
 use crate::problems::{JudgeRun, ProblemCompletion};
 
-use super::job::{Job, JobRequest};
+use super::job::JobRequest;
 
-use super::languages::RunConfig;
-use super::{JobState, JobStateReceiver};
+use super::languages::{LanguageConfig, RunConfig};
+use super::{JobState, JobStateReceiver, Worker};
 
 type UserId = i64;
 
@@ -91,10 +91,17 @@ impl RunManager {
         }
     }
 
-    async fn start_job(&mut self, request: JobRequest) -> Result<(), String> {
+    pub fn get_request_id(&mut self) -> u64 {
         let id = self.id_counter;
         self.id_counter += 1;
+        id
+    }
 
+    pub fn get_language_config(&self, language_key: &str) -> Option<LanguageConfig> {
+        self.config.languages.get(language_key).cloned()
+    }
+
+    async fn start_job(&mut self, request: JobRequest) -> Result<(), String> {
         if request.program.len() > self.config.max_program_length {
             return Err(format!(
                 "Program too long, max length is {} bytes",
@@ -106,27 +113,16 @@ impl RunManager {
         let problem_id = request.problem_id;
         let contest_id = request.contest_id;
         let program = request.program.clone();
-        let language = request.language.clone();
-
-        let language_config = self
-            .config
-            .languages
-            .get(&request.language)
-            .ok_or_else(|| format!("Language {} not supported by runner", request.language))?;
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (state_tx, state_rx) = tokio::sync::watch::channel(JobState::new_for_op(&request.op));
 
-        let (job, state_rx) = Job::new(id, request, shutdown_rx.clone(), language_config)
-            .await
-            .map_err(|e| {
-                error!("Couldn't create job: {:?}", e);
-                "Judge Error".to_string()
-            })?;
+        let shutdown_rx_handle = shutdown_rx.clone();
 
         let handle = Arc::new(Mutex::new(Some((
             problem_id,
             state_rx.clone(),
-            (shutdown_tx, shutdown_rx),
+            (shutdown_tx, shutdown_rx_handle),
         ))));
 
         self.jobs.insert(user_id, handle.clone());
@@ -135,8 +131,15 @@ impl RunManager {
 
         let leaderboard_handle = self.leaderboard_handle.clone();
 
+        let shutdown_rx_worker = shutdown_rx.clone();
+
+        let worker = Worker::new(request.clone());
+
         tokio::spawn(async move {
-            let (state, ran_at) = job.run().await;
+            let (state, ran_at) = worker
+                .spawn(state_tx, &request.op, shutdown_rx_worker)
+                .await;
+
             handle.lock().await.take();
             drop(handle);
             if !matches!(state, JobState::Judging { .. }) {
@@ -145,7 +148,12 @@ impl RunManager {
             match pool.get().await {
                 Ok(mut conn) => {
                     let run = JudgeRun::from_job_state(
-                        problem_id, user_id, program, language, &state, ran_at,
+                        problem_id,
+                        user_id,
+                        program,
+                        request.language_key.clone(),
+                        &state,
+                        ran_at,
                     );
                     if let Err(why) = Self::save_run(
                         &mut conn,

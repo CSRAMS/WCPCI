@@ -3,7 +3,7 @@ use sqlx::prelude::FromRow;
 
 use crate::{db::DbPoolConnection, error::prelude::*};
 
-#[derive(Serialize, FromRow, Clone, Debug)]
+#[derive(Serialize, Deserialize, FromRow, Clone, Debug)]
 pub struct TestCase {
     id: i64,
     problem_id: i64,

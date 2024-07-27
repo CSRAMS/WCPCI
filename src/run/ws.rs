@@ -26,7 +26,7 @@ use super::{JobState, JobStateReceiver, ManagerHandle};
 // Keep in sync with TypeScript type
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-enum WebSocketRequest {
+pub enum WebSocketRequest {
     Judge {
         program: String,
         language: String,
@@ -64,6 +64,7 @@ enum WebSocketMessage {
     Invalid { error: String },
 }
 
+#[allow(clippy::large_enum_variant)]
 enum LoopRes {
     Msg(WebSocketMessage),
     ChangeJobRx(JobStateReceiver),
@@ -76,17 +77,18 @@ enum LoopRes {
 
 async fn websocket_loop(
     mut stream: DuplexStream,
-    manager: ManagerHandle,
+    manager_handle: ManagerHandle,
     problem: Problem,
     test_cases: Vec<TestCase>,
     user_id: i64,
 ) {
-    let mut _manager = manager.lock().await;
-    let mut started_rx = _manager.subscribe();
-    let mut shutdown_rx = _manager.subscribe_shutdown(&user_id).await;
-    let mut updated_rx = _manager.get_handle_for_problem(problem.id);
-    let state_rx = _manager.get_handle(user_id, problem.id).await;
-    drop(_manager);
+    let mut manager = manager_handle.lock().await;
+    let mut started_rx = manager.subscribe();
+    let mut shutdown_rx = manager.subscribe_shutdown(&user_id).await;
+    let mut updated_rx = manager.get_handle_for_problem(problem.id);
+    let state_rx = manager.get_handle(user_id, problem.id).await;
+    drop(manager);
+
     // Fake receiver to start the loop, will be replaced by the real one
     let (_, fake_rx) = tokio::sync::watch::channel(JobState::new_judging(0));
 
@@ -137,16 +139,28 @@ async fn websocket_loop(
                                         WebSocketRequest::Judge { .. } => JobOperation::Judging(test_cases.clone()),
                                         WebSocketRequest::Test { input, .. } => JobOperation::Testing(input.to_string())
                                     };
-                                    let job_to_start = JobRequest {
-                                        user_id,
-                                        problem_id: problem.id,
-                                        contest_id: problem.contest_id,
-                                        program: request.program().to_string(),
-                                        language: request.language().to_string(),
-                                        cpu_time: problem.cpu_time,
-                                        op
-                                    };
-                                    LoopRes::JobStart(job_to_start)
+
+                                    let mut manager = manager_handle.lock().await;
+
+                                    if let Some(language) = manager.get_language_config(request.language()) {
+
+                                        let id = manager.get_request_id();
+
+                                        let job_to_start = JobRequest {
+                                            id,
+                                            user_id,
+                                            problem_id: problem.id,
+                                            contest_id: problem.contest_id,
+                                            program: request.program().to_string(),
+                                            language_key: request.language().to_string(),
+                                            language,
+                                            cpu_time: problem.cpu_time,
+                                            op
+                                        };
+                                        LoopRes::JobStart(job_to_start)
+                                    } else {
+                                        LoopRes::Msg(WebSocketMessage::Invalid { error: "Invalid language".to_string() })
+                                    }
                                 } else {
                                     LoopRes::Msg(WebSocketMessage::Invalid { error: "Invalid request".to_string() })
                                 }
@@ -193,7 +207,7 @@ async fn websocket_loop(
                 }
             }
             LoopRes::JobStart(job) => {
-                let mut manager = manager.lock().await;
+                let mut manager = manager_handle.lock().await;
                 let msg = match manager.request_job(job).await {
                     Ok(_) => WebSocketMessage::RunStarted,
                     Err(why) => WebSocketMessage::RunDenied { reason: why },
