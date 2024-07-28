@@ -26,7 +26,6 @@ export type CodeInfo = {
         tablerIcon: string;
         monacoContribution: string;
         defaultCode: string;
-        fileName: string;
     };
 };
 

@@ -8,7 +8,7 @@ use crate::{
     run::{runner::CaseError, worker::WorkerMessage},
 };
 
-use super::{languages::LanguageConfig, manager::ShutdownReceiver, runner::Runner};
+use super::{languages::ComputedRunData, manager::ShutdownReceiver, runner::Runner};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(tag = "status", content = "content", rename_all = "camelCase")]
@@ -172,7 +172,7 @@ pub struct JobRequest {
     pub problem_id: i64,
     pub program: String,
     pub language_key: String,
-    pub language: LanguageConfig,
+    pub language: ComputedRunData,
     pub cpu_time: i64,
     pub op: JobOperation,
 }
@@ -195,7 +195,6 @@ impl Job {
         };
 
         let res = Runner::new(
-            request.id,
             &request.language.compile_cmd,
             &request.language.run_cmd,
             &request.language.file_name,
@@ -233,7 +232,7 @@ impl Job {
         self.state.start_first();
         self.publish_state();
         if let Err(why) = self.runner.compile().await {
-            info!("Job {} Compilation Failed", self.id);
+            info!("Job {} Compilation Failed: {:?}", self.id, why);
             if matches!(&self.state, JobState::Testing { .. }) {
                 match why {
                     CaseError::Compilation(e) => {
@@ -250,7 +249,6 @@ impl Job {
                 self.state.complete_case(0, why.into());
             }
             self.publish_state();
-            self.runner.cleanup().await;
             return (self.state, self.started_at);
         }
         info!(
@@ -289,7 +287,6 @@ impl Job {
                     }
                     if self.shutdown_rx.has_changed().unwrap_or(false) {
                         info!("Job {} Received Shutdown Signal, Cancelling", self.id);
-                        self.runner.cleanup().await;
                         return (self.state, self.started_at);
                     }
                 }
@@ -320,7 +317,6 @@ impl Job {
         }
 
         info!("Job {} Finished", self.id);
-        self.runner.cleanup().await;
         (self.state, self.started_at)
     }
 

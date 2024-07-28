@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::Stdio};
+use std::process::Stdio;
 
 use log::{error, info};
 use tokio::io::AsyncWriteExt;
@@ -6,6 +6,7 @@ use tokio::{io::AsyncReadExt, select};
 
 use crate::problems::TestCase;
 
+use super::languages::CommandInfo;
 use super::{job::CaseStatus, manager::ShutdownReceiver};
 
 #[derive(Debug, Clone)]
@@ -36,69 +37,44 @@ impl From<CaseError> for CaseStatus {
 pub type CaseResult<T = ()> = Result<T, CaseError>;
 
 pub struct Runner {
-    run_cmd: String,
-    compile_cmd: String,
-    file_name: String,
-    temp_path: PathBuf,
+    run_cmd: CommandInfo,
+    compile_cmd: Option<CommandInfo>,
     shutdown_rx: ShutdownReceiver,
-    cleaned: bool,
     #[allow(dead_code)]
     max_cpu_time: i64,
 }
 
 impl Runner {
     pub async fn new(
-        id: u64,
-        compile_cmd: &str,
-        run_cmd: &str,
+        compile_cmd: &Option<CommandInfo>,
+        run_cmd: &CommandInfo,
         file_name: &str,
         program: &str,
         max_cpu_time: i64,
         shutdown_rx: ShutdownReceiver,
     ) -> CaseResult<Self> {
-        let now_nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| CaseError::Judge(format!("Couldn't get time: {e:?}")))?
-            .as_nanos();
-
-        let dir_name = format!("run_job_wcpc_{id}_{}", now_nanos);
-
-        let temp_path = std::env::temp_dir().join(dir_name);
-
-        tokio::fs::create_dir_all(&temp_path)
-            .await
-            .map_err(|e| CaseError::Judge(format!("Couldn't create temp dir: {e:?}")))?;
-
-        tokio::fs::write(temp_path.join(file_name), program.as_bytes())
+        tokio::fs::write(file_name, program.as_bytes())
             .await
             .map_err(|e| CaseError::Judge(format!("Couldn't write to program file: {e:?}")))?;
 
         Ok(Self {
-            run_cmd: run_cmd.to_string(),
-            compile_cmd: compile_cmd.to_string(),
-            file_name: file_name.to_string(),
-            temp_path,
+            run_cmd: run_cmd.clone(),
+            compile_cmd: compile_cmd.clone(),
             max_cpu_time,
             shutdown_rx,
-            cleaned: false,
         })
     }
 
     pub async fn compile(&mut self) -> Result<(), CaseError> {
-        if self.compile_cmd.is_empty() {
-            Ok(())
-        } else {
-            let env = std::env::var("PATH").unwrap_or_else(|_| "".to_string());
-            let mut cmd = tokio::process::Command::new("bash");
-            cmd.arg("-c")
-                .arg(&self.compile_cmd)
-                .current_dir(&self.temp_path)
-                .env_clear()
-                .env("PATH", env)
-                .stdin(Stdio::null())
+        if let Some(ref compile_cmd) = self.compile_cmd {
+            let mut cmd = compile_cmd.make_command();
+            cmd.stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .kill_on_drop(true);
+
+            debug!("Running command: {:?}", cmd);
+
             let output = cmd
                 .output()
                 .await
@@ -109,22 +85,25 @@ impl Runner {
             } else {
                 Ok(())
             }
+        } else {
+            Ok(())
         }
     }
 
     pub async fn run_cmd(&self, input: &str) -> CaseResult<String> {
-        let env_path = std::env::var("PATH").unwrap_or_else(|_| "".to_string());
-        let mut cmd = tokio::process::Command::new("bash");
+        let mut cmd = self.run_cmd.make_command();
 
-        cmd.arg("-c")
-            .arg(&self.run_cmd)
-            .current_dir(&self.temp_path)
-            .env_clear()
-            .env("PATH", env_path)
-            .stdin(Stdio::piped())
+        cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+
+        // const AA: &str = "/nix/store";
+        // debug!("List: {:?}", std::fs::read_dir(AA).unwrap().collect::<Vec<_>>());
+        // const AAAA: &str = "main.py";
+        // debug!("Main Exists?: {:?}", PathBuf::from(AAAA).exists());
+        // debug!("PATH is {:?}", std::env::var("PATH").unwrap_or_default());
+        // debug!("Current dir is {:?}", std::env::current_dir().unwrap());
 
         let mut child = cmd
             .spawn()
@@ -167,11 +146,6 @@ impl Runner {
                 .map_err(|e| CaseError::Judge(format!("Couldn't read stdout: {e:?}")))?;
             Ok(output)
         } else {
-            let path_str = self
-                .temp_path
-                .join(&self.file_name)
-                .to_string_lossy()
-                .to_string();
             let mut stderr = child
                 .stderr
                 .ok_or(CaseError::Judge("Couldn't open stderr".to_string()))?;
@@ -181,7 +155,6 @@ impl Runner {
                 .await
                 .map_err(|e| CaseError::Judge(format!("Couldn't read stderr: {e:?}")))?;
             let code = res.code().unwrap_or(-1);
-            let std_err = std_err.replace(&path_str, "<your program>");
             error!("Process exited with error {code}:\n\n {std_err}");
             Err(CaseError::Runtime(format!(
                 "Process exited with error {code}:\n\n {std_err}"
@@ -202,22 +175,5 @@ impl Runner {
                 }
             },
         )
-    }
-
-    pub async fn cleanup(&mut self) {
-        self.cleaned = true;
-        if let Err(why) = tokio::fs::remove_dir_all(&self.temp_path).await {
-            error!("Couldn't remove temp dir: {why:?}");
-        }
-    }
-}
-
-impl Drop for Runner {
-    fn drop(&mut self) {
-        if !self.cleaned {
-            std::fs::remove_dir_all(&self.temp_path).unwrap_or_else(|e| {
-                error!("Couldn't remove temp dir: {e:?}");
-            });
-        }
     }
 }

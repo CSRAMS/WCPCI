@@ -1,17 +1,17 @@
-use std::sync::Arc;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use log::{error, warn};
 use rocket::{fairing::AdHoc, routes};
 use rocket_db_pools::Database as R_Database;
 use tokio::sync::Mutex;
 
-use crate::{db::Database, leaderboard::LeaderboardManagerHandle};
+use crate::{db::Database, error::prelude::*, leaderboard::LeaderboardManagerHandle};
 
 use self::manager::RunManager;
 
 mod job;
 mod languages;
-//mod lockdown;
+mod lockdown;
 mod manager;
 mod runner;
 mod worker;
@@ -26,11 +26,25 @@ pub type ManagerHandle = Arc<Mutex<RunManager>>;
 
 pub use job::JobState;
 pub use languages::RunConfig;
-pub use worker::{Worker, WorkerMessage};
+pub use worker::{Worker, WorkerLogger, WorkerMessage};
 
 pub struct CodeInfo {
     pub run_config: RunConfig,
     pub languages_json: String,
+}
+
+pub async fn make_temp(prefix: &str) -> Result<PathBuf> {
+    let now_nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .context("Couldn't get time since epoch")?
+        .as_nanos();
+    let temp_dir = std::env::temp_dir();
+    let name = format!("{prefix}_{}", now_nanos);
+    let temp_path = temp_dir.join(name);
+    tokio::fs::create_dir_all(&temp_path)
+        .await
+        .context("Couldn't create temp directory")?;
+    Ok(temp_path)
 }
 
 pub fn stage() -> AdHoc {
@@ -71,7 +85,12 @@ pub fn stage() -> AdHoc {
                         return Err(rocket);
                     }
                 };
-                let code_info = serde_json::to_string(&config.languages).unwrap();
+                let languages_display = config
+                    .languages
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.display.clone()))
+                    .collect::<HashMap<_, _>>();
+                let code_info = serde_json::to_string(&languages_display).unwrap();
                 let leaderboard_manager =
                     rocket.state::<LeaderboardManagerHandle>().unwrap().clone();
                 let manager =

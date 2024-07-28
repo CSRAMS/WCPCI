@@ -153,7 +153,7 @@ async fn websocket_loop(
                                             contest_id: problem.contest_id,
                                             program: request.program().to_string(),
                                             language_key: request.language().to_string(),
-                                            language,
+                                            language: language.clone(),
                                             cpu_time: problem.cpu_time,
                                             op
                                         };

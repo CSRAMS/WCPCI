@@ -14,7 +14,7 @@ use crate::problems::{JudgeRun, ProblemCompletion};
 
 use super::job::JobRequest;
 
-use super::languages::{LanguageConfig, RunConfig};
+use super::languages::{ComputedRunData, RunConfig};
 use super::{JobState, JobStateReceiver, Worker};
 
 type UserId = i64;
@@ -34,6 +34,7 @@ pub type ShutDownSender = tokio::sync::watch::Sender<bool>;
 
 pub struct RunManager {
     config: RunConfig,
+    language_run_data: HashMap<String, ComputedRunData>,
     id_counter: u64,
     jobs: HashMap<UserId, RunHandle>,
     db_pool: DbPool,
@@ -51,8 +52,15 @@ impl RunManager {
         shutdown_rx: ShutdownReceiver,
     ) -> Self {
         let (tx, rx) = tokio::sync::broadcast::channel(10);
+        let run_data = config
+            .languages
+            .iter()
+            .map(|(k, l)| (k.clone(), ComputedRunData::compute(&config, &l.runner)))
+            .collect();
+
         Self {
             config,
+            language_run_data: run_data,
             id_counter: 1,
             leaderboard_handle: leaderboard_manager,
             jobs: HashMap::with_capacity(10),
@@ -97,8 +105,8 @@ impl RunManager {
         id
     }
 
-    pub fn get_language_config(&self, language_key: &str) -> Option<LanguageConfig> {
-        self.config.languages.get(language_key).cloned()
+    pub fn get_language_config(&self, language_key: &str) -> Option<ComputedRunData> {
+        self.language_run_data.get(language_key).cloned()
     }
 
     async fn start_job(&mut self, request: JobRequest) -> Result<(), String> {
@@ -133,7 +141,12 @@ impl RunManager {
 
         let shutdown_rx_worker = shutdown_rx.clone();
 
-        let worker = Worker::new(request.clone());
+        let worker = Worker::new(request.id, request.clone())
+            .await
+            .map_err(|e| {
+                error!("Couldn't create worker: {:?}", e);
+                "JudgeError: Couldn't create worker".to_string()
+            })?;
 
         tokio::spawn(async move {
             let (state, ran_at) = worker
