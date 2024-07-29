@@ -1,12 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::bail;
+use log::debug;
 use nix::{
     mount::{MntFlags, MsFlags},
     sched::CloneFlags,
+    unistd::ForkResult,
 };
 
-use crate::error::prelude::*;
+use crate::{error::prelude::*, run::WorkerMessage};
 
 use super::job::JobRequest;
 
@@ -77,47 +79,57 @@ fn chroot_jail(new_root: &Path) -> Result {
     std::env::set_current_dir(new_root).context("Couldn't set current directory to new root")?;
     nix::unistd::chroot(new_root).context("Couldn't chroot to new root")?;
 
-    // Mount the /proc filesystem
-
-    // std::fs::create_dir_all("/proc")
-    //     .context("Couldn't create /proc directory")?;
-
-    // nix::mount::mount(
-    //     None::<&str>,
-    //     "/proc",
-    //     Some("proc"),
-    //     MsFlags::empty(),
-    //     None::<&str>,
-    // )
-    // .context("Couldn't mount /proc")?;
-
-    // Create temp directory for /tmp
-
-    std::fs::create_dir_all("/tmp").context("Couldn't create /tmp directory in new root")
+    Ok(())
 }
 
-fn unshare() -> Result {
+fn setup_namespaces() -> Result {
     nix::sched::unshare(
         CloneFlags::CLONE_NEWUSER
             | CloneFlags::CLONE_NEWNS
-               // | CloneFlags::CLONE_NEWPID
-               | CloneFlags::CLONE_NEWNET
-               | CloneFlags::CLONE_NEWIPC
-               | CloneFlags::CLONE_NEWCGROUP,
+            | CloneFlags::CLONE_NEWPID
+            | CloneFlags::CLONE_NEWNET
+            | CloneFlags::CLONE_NEWIPC
+            | CloneFlags::CLONE_NEWCGROUP,
     )
     .context("Couldn't create new namespace(s)")
+    // TODO: Set up uid and gid mappings
 }
 
-/// Run to lockdown the running process
-/// This should *only be run in a worker process*
-pub fn lockdown_process(req: &JobRequest, new_root: &Path) -> Result<Vec<BindMount>> {
-    // Unshare
-    unshare()?;
+// Ellis wrote this when tired
+// fn wait_for_child(child: Pid) -> ! {
+//     match nix::sys::wait::wait() {
+//         Ok(status) => {
+//             debug!("Child pid is {child} and status is {status:?}");
 
-    // TODO: Set up uid and gid mappings
+//             let child_exited = matches!(
+//                 status,
+//                 WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _)
+//             );
 
-    // ---
+//             if !child_exited {
+//                 wait_for_child(child); // Retry
+//             }
 
+//             // SIGKILL guarantees that the child (and thus everything in the PID namespace)
+//             // exits immediately, so we can safely exit
+//             std::process::exit(0);
+//         }
+//         Err(Errno::EINTR) => {
+//             wait_for_child(child); // We recieved a signal and should keep waiting !!!: if the child exits after we recieve the signal, but before we resume waiting,
+//         }
+//         Err(err) => {
+//             error!("Error waiting: {err}. Killing child process...");
+//             let res = nix::sys::signal::kill(child, signal::SIGKILL)
+//                 .context("Couldn't kill child process");
+//             if let Err(e) = res {
+//                 error!("{e:?}");
+//             }
+//             std::process::exit(1);
+//         }
+//     }
+// }
+
+fn setup_environment(req: &JobRequest, new_root: &Path) -> Result<Vec<BindMount>> {
     // Bind mount the expose paths needed for the language to run
 
     let mut mounts = Vec::with_capacity(req.language.expose_paths.len());
@@ -132,15 +144,73 @@ pub fn lockdown_process(req: &JobRequest, new_root: &Path) -> Result<Vec<BindMou
         mounts.push(mount);
     }
 
+    // Mount the /proc filesystem
+
+    std::fs::create_dir_all("/proc").context("Couldn't create /proc directory")?;
+
+    nix::mount::mount(
+        None::<&str>,
+        "/proc",
+        Some("proc"),
+        MsFlags::empty(),
+        None::<&str>,
+    )
+    .context("Couldn't mount /proc")?;
+
+    // Create temp directory for /tmp
+
+    std::fs::create_dir_all("/tmp").context("Couldn't create /tmp directory in new root")?;
+
+    Ok(mounts)
+}
+
+/// Run to lockdown the running process
+/// This should *only be run in a worker process*
+pub fn lockdown_process(req: &JobRequest, new_root: &Path) -> Result<Vec<BindMount>> {
+    // Unshare
+    setup_namespaces()?;
+
+    // Fork to new PID namespace as pid 1
+    // Ellis says this *should* be safe as long as the parent isn't multithreaded at the time it calls `fork`
+    unsafe {
+        let res = nix::unistd::fork().context("Couldn't fork PID 1 in new PID namespace")?;
+
+        if let ForkResult::Parent { child } = res {
+            let msg = WorkerMessage::ChildPid(child.as_raw());
+            let msg = serde_json::to_string(&msg).context("Couldn't serialize WorkerMessage")?;
+            println!("{}", msg);
+            std::process::exit(0);
+        }
+    }
+
+    // ---
+
+    // // Bind mount the expose paths needed for the language to run
+
+    // let mut mounts = Vec::with_capacity(req.language.expose_paths.len());
+
+    // for path in &req.language.expose_paths {
+    //     let mount = BindMount::new(new_root, path).with_context(|| {
+    //         format!(
+    //             "Couldn't bind mount expose path ({})",
+    //             path.to_string_lossy()
+    //         )
+    //     })?;
+    //     mounts.push(mount);
+    // }
+    let mounts = setup_environment(req, new_root)?;
+
     chroot_jail(new_root)?;
 
     // TODO: Drop capabilities
     // Make sure to drop set time capabilities, or do CloneFlags::CLONE_NEWUTS in unshare
 
+    // TODO: other security things (seccomp)?
+
     // ---
 
-    let path_var = std::env::var("PATH").unwrap_or_default();
-    debug!("PATH: {}", path_var);
+    // let path_var = std::env::var("PATH").unwrap_or_default();
+    // debug!("PATH: {}", path_var);
 
     Ok(mounts)
 }

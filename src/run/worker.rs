@@ -6,6 +6,7 @@ use std::{
 use anyhow::bail;
 use chrono::NaiveDateTime;
 use log::warn;
+use nix::{sys::signal, unistd::Pid};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt},
     select,
@@ -27,6 +28,7 @@ pub struct Worker {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum WorkerMessage {
     StateChange(JobState),
+    ChildPid(i32),
     Finished(JobState, NaiveDateTime),
     Failed(String),
 }
@@ -78,6 +80,7 @@ impl Worker {
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::inherit())
+            .kill_on_drop(true)
             .spawn()
             .context("Couldn't spawn worker process")?;
 
@@ -99,6 +102,8 @@ impl Worker {
 
         let mut buf = String::new();
 
+        let mut child_pid: Option<i32> = None;
+
         let mut last_state = JobState::new_for_op(&self.request.op);
 
         loop {
@@ -116,6 +121,9 @@ impl Worker {
                                 warn!("Couldn't send job state: {}", why);
                             }
                         },
+                        Ok(WorkerMessage::ChildPid(pid)) => {
+                            child_pid = Some(pid);
+                        },
                         Ok(WorkerMessage::Finished(state, dt)) => {
                             return Ok((state, dt));
                         },
@@ -123,6 +131,7 @@ impl Worker {
                             last_state.force_fail("JudgeError: Worker process failed");
                             state_tx.send(last_state.clone()).context("Couldn't send job state")?;
                             error!("Worker process failed: {}", why);
+                            child.wait().await.context("Couldn't wait for worker process")?;
                             return Ok((last_state, chrono::Utc::now().naive_utc()));
                         },
                         Err(why) => {
@@ -131,7 +140,9 @@ impl Worker {
                     }
                     buf.clear();
                 },
-                _ = child.wait() => {
+                _ = child.wait(), if child_pid.is_none() => {
+                    last_state.force_fail("Worker process exited unexpectedly");
+                    state_tx.send(last_state.clone()).context("Couldn't send job state")?;
                     stdout_reader.read_to_string(&mut buf).await.context("[E] Couldn't read child stdout")?;
                     bail!("Worker process exited unexpectedly:\n\n{buf}");
                 },
@@ -139,6 +150,11 @@ impl Worker {
                     last_state.force_fail("Run Cancelled");
                     state_tx.send(last_state.clone()).context("Couldn't send job state")?;
                     child.kill().await.context("Couldn't kill worker process")?;
+                    if let Some(child_pid) = child_pid {
+                        let pid = Pid::from_raw(child_pid as i32);
+                        nix::sys::signal::kill(pid, signal::SIGKILL)
+                            .context("Couldn't kill worker process")?;
+                    }
                     return Ok((last_state, chrono::Utc::now().naive_utc()));
                 }
             }
@@ -157,8 +173,10 @@ impl Worker {
         let request = serde_json::from_str::<JobRequest>(&buffer)
             .context("Couldn't deserialize job request")?;
 
-        let _mounts = super::lockdown::lockdown_process(&request, dir)
+        let mounts = super::lockdown::lockdown_process(&request, dir)
             .context("Couldn't lockdown worker process")?;
+
+        drop(stdin_reader);
 
         info!("Worker process started and locked");
 
@@ -168,6 +186,12 @@ impl Worker {
 
         let res = WorkerMessage::Finished(state, completed_at);
         let res = serde_json::to_string(&res).context("Couldn't serialize job result")?;
+
+        for mount in mounts {
+            if let Err(why) = mount.unmount().context("Couldn't unmount bind mount") {
+                error!("Couldn't unmount bind mount: {:?}", why);
+            }
+        }
 
         println!("{}", res);
 

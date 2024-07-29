@@ -13,7 +13,7 @@ dotenvy = "0.15.7"
 flate2 = { version = "1.0.30" }
 log = "0.4.21"
 markdown = "1.0.0-alpha.16"
-nix = { version = "0.29.0", features = ["sched", "mount", "process", "fs"] }
+nix = { version = "0.29.0", features = ["sched", "mount", "process", "fs", "signal"] }
 openssl = "0.10.64"
 rand = "0.8.5"
 regex = "1.10.3"
