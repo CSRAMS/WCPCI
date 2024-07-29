@@ -137,11 +137,9 @@ export default (
     const saveChanges = () => {
         if (!editor) return;
         const text = editor.getValue();
-        const language = editor.getModel()?.getLanguageId();
-        if (!language) return;
         window.localStorage.setItem(
             `contest-${contestId}-problem-${problemId}-code`,
-            JSON.stringify([text, language])
+            JSON.stringify([text, currentLanguage])
         );
         window.localStorage.setItem(
             `contest-${contestId}-problem-${problemId}-${currentLanguage}-code`,

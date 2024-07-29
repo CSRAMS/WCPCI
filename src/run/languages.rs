@@ -100,6 +100,9 @@ pub struct RunConfig {
     pub default_language: String,
     #[serde(default)]
     pub expose_paths: Vec<String>,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    // TODO: Make network configurable
 }
 
 impl RunConfig {
@@ -119,6 +122,7 @@ pub struct ComputedRunData {
     pub compile_cmd: Option<CommandInfo>,
     pub run_cmd: CommandInfo,
     pub expose_paths: Vec<PathBuf>,
+    pub environment: HashMap<String, String>,
     pub path_var: String,
     pub file_name: String,
 }
@@ -128,7 +132,7 @@ impl ComputedRunData {
         let binaries = vec![
             lang.compile_cmd.as_ref().and_then(|c| c.resolve_binary()),
             lang.run_cmd.resolve_binary(),
-            CommandInfo::where_is("env"),
+            CommandInfo::where_is("env"), // TODO(Ellis): remove?
         ];
 
         let path_var = binaries
@@ -152,8 +156,16 @@ impl ComputedRunData {
 
         expose_paths.extend(lang.additional_paths.iter().map(PathBuf::from));
 
+        let env = run_config
+            .env
+            .iter()
+            .chain(lang.env.iter())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<HashMap<_, _>>();
+
         ComputedRunData {
             compile_cmd: lang.compile_cmd.clone(),
+            environment: env,
             run_cmd: lang.run_cmd.clone(),
             expose_paths,
             file_name: lang.file_name.clone(),

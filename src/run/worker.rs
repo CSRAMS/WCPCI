@@ -75,7 +75,8 @@ impl Worker {
         let mut child = tokio::process::Command::new(self_path)
             .arg("--worker")
             .env_clear()
-            .env("PATH", &self.request.language.path_var)
+            .envs(self.request.language.environment.iter())
+            .env("PATH", &self.request.language.path_var) // TODO(Ellis): look at later
             .current_dir(&self.tmp_path)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -151,7 +152,7 @@ impl Worker {
                     state_tx.send(last_state.clone()).context("Couldn't send job state")?;
                     child.kill().await.context("Couldn't kill worker process")?;
                     if let Some(child_pid) = child_pid {
-                        let pid = Pid::from_raw(child_pid as i32);
+                        let pid = Pid::from_raw(child_pid);
                         nix::sys::signal::kill(pid, signal::SIGKILL)
                             .context("Couldn't kill worker process")?;
                     }
@@ -202,6 +203,17 @@ impl Worker {
 impl Drop for Worker {
     fn drop(&mut self) {
         if self.tmp_path.exists() {
+            let dir = self
+                .tmp_path
+                .read_dir()
+                .map(|d| d.collect::<Vec<_>>())
+                .unwrap_or_default();
+            if !dir.is_empty() {
+                warn!("Temp directory {:?} not empty, contents:", dir);
+                for entry in dir {
+                    warn!("- {:?}", entry);
+                }
+            }
             std::fs::remove_dir_all(&self.tmp_path).unwrap_or_else(|why| {
                 warn!("Couldn't remove temp directory: {:?}", why);
             });
@@ -217,7 +229,7 @@ impl WorkerLogger {
     fn new() -> Self {
         let cwd = std::env::current_dir().unwrap();
         let name = cwd.file_name().unwrap().to_string_lossy().to_string();
-        let number = name.split("_").nth(2).unwrap_or(&"?");
+        let number = name.split('_').nth(2).unwrap_or("?");
         Self(format!("Worker Run #{number}"))
     }
 
