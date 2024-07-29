@@ -37,6 +37,21 @@ max_program_length = 100000
 default_language = "python"
 expose_paths = [ "/nix/store" ]
 
+# -- Bash
+
+[debug.run.languages.bash.display]
+name = "Bash"
+default_code = """
+echo "Hello, World!"
+"""
+tabler_icon = "terminal"
+monaco_contribution = "bash"
+
+[debug.run.languages.bash.runner]
+file_name = "main.sh"
+run_cmd = { binary = "bash", args = [ "./main.sh" ] }
+
+
 # -- Python
 
 [debug.run.languages.python.display]

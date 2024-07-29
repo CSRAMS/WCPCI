@@ -1,10 +1,13 @@
-use std::path::{Path, PathBuf};
+use std::{
+    io::{BufRead, BufReader},
+    path::{Path, PathBuf},
+};
 
 use anyhow::bail;
 use chrono::NaiveDateTime;
 use log::warn;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt},
     select,
 };
 
@@ -12,7 +15,6 @@ use crate::error::prelude::*;
 
 use super::{
     job::{Job, JobOperation, JobRequest},
-    lockdown::BindMount,
     manager::ShutdownReceiver,
     JobState, JobStateSender,
 };
@@ -20,7 +22,6 @@ use super::{
 pub struct Worker {
     tmp_path: PathBuf,
     request: JobRequest,
-    mounts: Vec<BindMount>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -35,26 +36,7 @@ impl Worker {
         let tmp_path = super::make_temp(&format!("wcpc_worker_{}", id))
             .await
             .context("Couldn't create temp directory")?;
-        let mut mounts = Vec::with_capacity(request.language.expose_paths.len());
-        for path in request.language.expose_paths.iter() {
-            let mount = BindMount::new(&tmp_path, path)
-                .await
-                .context("Couldn't create bind mount")?;
-            mounts.push(mount);
-        }
-        Ok(Worker {
-            tmp_path,
-            request,
-            mounts,
-        })
-    }
-
-    fn unmount_all(&self) {
-        for mount in &self.mounts {
-            mount.unmount().unwrap_or_else(|why| {
-                warn!("Couldn't unmount bind mount: {:?}", why);
-            });
-        }
+        Ok(Worker { tmp_path, request })
     }
 
     pub async fn spawn(
@@ -64,7 +46,6 @@ impl Worker {
         shutdown_rx: ShutdownReceiver,
     ) -> (JobState, NaiveDateTime) {
         let res = self._spawn(&state_tx, shutdown_rx).await;
-        self.unmount_all();
         tokio::fs::remove_dir_all(&self.tmp_path)
             .await
             .unwrap_or_else(|why| {
@@ -110,11 +91,15 @@ impl Worker {
             .await
             .context("Couldn't write job request to child")?;
 
+        drop(stdin);
+
         let stdout = child.stdout.take().context("Couldn't get child stdout")?;
 
         let mut stdout_reader = tokio::io::BufReader::new(stdout);
 
         let mut buf = String::new();
+
+        let mut last_state = JobState::new_for_op(&self.request.op);
 
         loop {
             select! {
@@ -125,6 +110,7 @@ impl Worker {
                     let msg = serde_json::from_str::<WorkerMessage>(&buf);
                     match msg {
                         Ok(WorkerMessage::StateChange(state)) => {
+                            last_state = state.clone();
                             let res = state_tx.send(state).context("Couldn't send job state");
                             if let Err(why) = res {
                                 warn!("Couldn't send job state: {}", why);
@@ -134,10 +120,13 @@ impl Worker {
                             return Ok((state, dt));
                         },
                         Ok(WorkerMessage::Failed(why)) => {
-                            bail!("Worker process failed: {}", why);
+                            last_state.force_fail("JudgeError: Worker process failed");
+                            state_tx.send(last_state.clone()).context("Couldn't send job state")?;
+                            error!("Worker process failed: {}", why);
+                            return Ok((last_state, chrono::Utc::now().naive_utc()));
                         },
                         Err(why) => {
-                            warn!("Couldn't deserialize worker message: {}", why);
+                            warn!("Couldn't deserialize worker message:\n{}\n\nMessage: \"{}\"", why, &buf);
                         }
                     }
                     buf.clear();
@@ -147,62 +136,40 @@ impl Worker {
                     bail!("Worker process exited unexpectedly:\n\n{buf}");
                 },
                 _ = shutdown_rx.changed() => {
-                    stdin.write_all(b"shutdown\n").await.context("Couldn't send shutdown to worker")?;
+                    last_state.force_fail("Run Cancelled");
+                    state_tx.send(last_state.clone()).context("Couldn't send job state")?;
+                    child.kill().await.context("Couldn't kill worker process")?;
+                    return Ok((last_state, chrono::Utc::now().naive_utc()));
                 }
             }
         }
     }
 
-    pub async fn run_from_child(dir: &Path) -> Result {
-        let _handle = super::lockdown::lockdown_process(dir)
-            .await
-            .context("Couldn't lockdown worker process")?;
-
-        let stdin = tokio::io::stdin();
+    pub fn run_from_child(dir: &Path) -> Result {
+        let stdin = std::io::stdin();
         let mut buffer = String::new();
         let mut stdin_reader = BufReader::new(stdin);
 
         stdin_reader
             .read_line(&mut buffer)
-            .await
             .context("Couldn't read job request")?;
 
         let request = serde_json::from_str::<JobRequest>(&buffer)
             .context("Couldn't deserialize job request")?;
 
-        let (tx, rx) = tokio::sync::watch::channel(false);
+        let _mounts = super::lockdown::lockdown_process(&request, dir)
+            .context("Couldn't lockdown worker process")?;
 
-        let job = Job::new(request, rx).await.context("Couldn't create job")?;
+        info!("Worker process started and locked");
 
-        let handle = tokio::spawn(async move { job.run().await });
+        let job = Job::new(request).context("Couldn't create job")?;
 
-        let mut shutdown_triggered = false;
-        const SHUTDOWN_TIMEOUT: tokio::time::Duration = tokio::time::Duration::from_millis(3000);
+        let (state, completed_at) = job.run();
 
-        tokio::pin!(handle);
+        let res = WorkerMessage::Finished(state, completed_at);
+        let res = serde_json::to_string(&res).context("Couldn't serialize job result")?;
 
-        loop {
-            select! {
-                biased; // Prefer the first branch if the job completed
-
-                res = handle.as_mut() => {
-                    let (state, completed_at) = res.context("Couldn't get job result")?;
-                    let msg = WorkerMessage::Finished(state, completed_at);
-                    let res = serde_json::to_string(&msg).context("Couldn't serialize job state")?;
-                    println!("{}", res);
-                    break;
-                },
-                _ = stdin_reader.read_line(&mut buffer) => {
-                    shutdown_triggered = true;
-                    tx.send(true).ok();
-                },
-                _ = tokio::time::sleep(SHUTDOWN_TIMEOUT), if shutdown_triggered => {
-                    "Shutdown timeout".to_string();
-                }
-            }
-        }
-
-        drop(_handle);
+        println!("{}", res);
 
         Ok(())
     }
@@ -225,7 +192,9 @@ pub struct WorkerLogger(String);
 impl WorkerLogger {
     fn new() -> Self {
         let cwd = std::env::current_dir().unwrap();
-        Self(cwd.to_string_lossy().to_string())
+        let name = cwd.file_name().unwrap().to_string_lossy().to_string();
+        let number = name.split("_").nth(2).unwrap_or(&"?");
+        Self(format!("Worker Run #{number}"))
     }
 
     pub fn setup() {

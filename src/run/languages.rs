@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, process::Command};
 
 use serde::Deserialize;
 
@@ -32,8 +32,8 @@ impl CommandInfo {
         Self::where_is(&self.binary)
     }
 
-    pub fn make_command(&self) -> tokio::process::Command {
-        let mut cmd = tokio::process::Command::new(self.binary.clone());
+    pub fn make_command(&self) -> Command {
+        let mut cmd = Command::new(self.binary.clone());
         cmd.args(&self.args);
         cmd
     }

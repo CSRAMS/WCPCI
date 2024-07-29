@@ -8,7 +8,7 @@ use crate::{
     run::{runner::CaseError, worker::WorkerMessage},
 };
 
-use super::{languages::ComputedRunData, manager::ShutdownReceiver, runner::Runner};
+use super::{languages::ComputedRunData, runner::Runner};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(tag = "status", content = "content", rename_all = "camelCase")]
@@ -184,11 +184,10 @@ pub struct Job {
     op: JobOperation,
     pub state: JobState,
     started_at: NaiveDateTime,
-    shutdown_rx: ShutdownReceiver,
 }
 
 impl Job {
-    pub async fn new(request: JobRequest, shutdown_rx: ShutdownReceiver) -> Result<Self> {
+    pub fn new(request: JobRequest) -> Result<Self> {
         let mut state = match request.op {
             JobOperation::Judging(ref cases) => JobState::new_judging(cases.len()),
             JobOperation::Testing(_) => JobState::new_testing(),
@@ -200,9 +199,7 @@ impl Job {
             &request.language.file_name,
             &request.program,
             request.cpu_time,
-            shutdown_rx.clone(),
-        )
-        .await;
+        );
 
         match res {
             Ok(runner) => {
@@ -214,7 +211,6 @@ impl Job {
                     user_id: request.user_id,
                     op: request.op,
                     started_at: chrono::offset::Utc::now().naive_utc(),
-                    shutdown_rx,
                 })
             }
             Err(e) => {
@@ -228,10 +224,10 @@ impl Job {
         }
     }
 
-    pub async fn run(mut self) -> (JobState, NaiveDateTime) {
+    pub fn run(mut self) -> (JobState, NaiveDateTime) {
         self.state.start_first();
         self.publish_state();
-        if let Err(why) = self.runner.compile().await {
+        if let Err(why) = self.runner.compile() {
             info!("Job {} Compilation Failed: {:?}", self.id, why);
             if matches!(&self.state, JobState::Testing { .. }) {
                 match why {
@@ -259,7 +255,7 @@ impl Job {
             JobOperation::Judging(cases) => {
                 for (i, case) in cases.iter().enumerate() {
                     info!("Job {} Running Case {}", self.id, i + 1);
-                    let status = match self.runner.run_case(case).await {
+                    let status = match self.runner.run_case(case) {
                         Ok(_) => CaseStatus::Passed(None),
                         Err(e) => match &e {
                             CaseError::Judge(ref why) => {
@@ -285,15 +281,11 @@ impl Job {
                     if self.state.complete() {
                         break;
                     }
-                    if self.shutdown_rx.has_changed().unwrap_or(false) {
-                        info!("Job {} Received Shutdown Signal, Cancelling", self.id);
-                        return (self.state, self.started_at);
-                    }
                 }
             }
             JobOperation::Testing(input) => {
                 info!("Job {} Running Test", self.id);
-                let status = match self.runner.run_cmd(input).await {
+                let status = match self.runner.run_cmd(input) {
                     Ok(out) => CaseStatus::Passed(Some(out)),
                     Err(e) => match &e {
                         CaseError::Judge(ref why) => {

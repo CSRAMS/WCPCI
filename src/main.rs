@@ -51,22 +51,29 @@ fn on_worker_fail(why: anyhow::Error) {
     std::process::exit(1);
 }
 
-#[rocket::main]
-async fn main() -> Result<(), rocket::Error> {
+fn main() {
     let args = std::env::args().collect::<Vec<_>>();
 
     if args.contains(&"--worker".to_string()) {
-        WorkerLogger::setup();
-        info!("Starting worker...");
-        let cwd = std::env::current_dir().unwrap();
-        run::Worker::run_from_child(&cwd)
-            .await
-            .map_err(on_worker_fail)
-            .unwrap();
+        _worker()
     } else {
-        rocket().ignite().await?.launch().await?;
+        _main().expect("Rocket failed to start");
     }
+}
 
+//#[tokio::main(flavor = "current_thread")]
+fn _worker() {
+    WorkerLogger::setup();
+    info!("Starting worker...");
+    let cwd = std::env::current_dir().unwrap();
+    run::Worker::run_from_child(&cwd)
+        .map_err(on_worker_fail)
+        .expect("Worker failed to start");
+}
+
+#[rocket::main]
+async fn _main() -> Result<(), rocket::Error> {
+    rocket().ignite().await?.launch().await?;
     Ok(())
 }
 
