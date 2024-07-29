@@ -149,8 +149,6 @@ impl ComputedRunData {
         let mut expose_paths = run_config
             .expose_paths
             .iter()
-            // TODO: Remove when we setup /dev properly
-            .chain([String::from("/dev/null")].iter())
             .map(PathBuf::from)
             .collect::<Vec<_>>();
 

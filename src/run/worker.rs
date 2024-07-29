@@ -234,7 +234,7 @@ impl WorkerLogger {
     }
 
     pub fn setup() {
-        let logger = WorkerLogger::new();
+        let logger = Self::new();
         let level = if cfg!(debug_assertions) {
             log::LevelFilter::Debug
         } else {

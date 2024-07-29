@@ -45,7 +45,7 @@ default_code = """
 echo "Hello, World!"
 """
 tabler_icon = "terminal"
-monaco_contribution = "bash"
+monaco_contribution = "shell"
 
 [debug.run.languages.bash.runner]
 file_name = "main.sh"

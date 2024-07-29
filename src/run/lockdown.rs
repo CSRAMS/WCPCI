@@ -86,9 +86,21 @@ fn setup_namespaces() -> Result {
     // TODO: Set up uid and gid mappings
 }
 
+// TODO: make these configurable, ideally per-language
+
+// TODO: mknod instead of bind mount
+const DEV_BINDS: [&str; 4] = ["/dev/null", "/dev/zero", "/dev/random", "/dev/urandom"];
+
+const DEV_LINKS: [(&str, &str); 4] = [
+    ("dev/stdin", "/proc/self/fd/0"),
+    ("dev/stdout", "/proc/self/fd/1"),
+    ("dev/stderr", "/proc/self/fd/2"),
+    ("dev/fd", "/proc/self/fd/"),
+];
+
 fn setup_environment(req: &JobRequest, new_root: &Path) -> Result<Vec<BindMount>> {
     // TODO(Ellis): tmpfs root?
-    // TODO(Ellis mostly): make all mounts & created directories configurable?
+    // TODO(Ellis mostly): make all mounts & created directories configurable? (& symlinks)
 
     // Bind mount the expose paths needed for the language to run
 
@@ -104,23 +116,52 @@ fn setup_environment(req: &JobRequest, new_root: &Path) -> Result<Vec<BindMount>
         mounts.push(mount);
     }
 
+    // Bind mount the /dev paths for common devices
+
+    for path in &DEV_BINDS {
+        let dev_path = PathBuf::from(path);
+        let mount = BindMount::new(new_root, &dev_path).with_context(|| {
+            format!(
+                "Couldn't bind mount dev path ({})",
+                dev_path.to_string_lossy()
+            )
+        })?;
+        mounts.push(mount);
+    }
+
     // Mount the /proc filesystem
 
-    std::fs::create_dir_all(new_root.join("proc")).context("Couldn't create /proc directory")?;
+    let proc_dir = new_root.join("proc");
 
+    std::fs::create_dir_all(&proc_dir).context("Couldn't create /proc directory")?;
+
+    // TODO(Ellis): do we want to use hidepid={1,2}
     nix::mount::mount(
         None::<&str>,
-        &new_root.join("proc"),
+        &proc_dir,
         Some("proc"),
         MsFlags::empty(),
         None::<&str>,
     )
     .context("Couldn't mount /proc")?;
 
+    // Create symlinks for some fd paths
+    for (link, target) in &DEV_LINKS {
+        let link_path = new_root.join(link);
+        let target_path = PathBuf::from(target);
+
+        std::os::unix::fs::symlink(target_path, link_path).context("Couldn't create symlink")?;
+    }
+
     // Create temp directory for /tmp
 
     std::fs::create_dir_all(new_root.join("tmp"))
         .context("Couldn't create /tmp directory in new root")?;
+
+    // Create /dev/shm directory, basically /tmp
+
+    std::fs::create_dir_all(new_root.join("dev/shm"))
+        .context("Couldn't create /dev/shm directory in new root")?;
 
     Ok(mounts)
 }
@@ -135,7 +176,14 @@ fn chroot_jail(new_root: &Path) -> Result {
 
 fn harden_process() -> Result {
     // TODO: Drop capabilities
+    // CAP_DAC_READ_SEARCH - for access to /proc/[pid]/fd
+    // CAP_SYS_PTRACE - to read symlinks under /proc/[pid]/fd/*
     // Make sure to drop set time capabilities, or do CloneFlags::CLONE_NEWUTS in unshare
+
+    // Set dumpable to false
+    // Set secure bits
+
+    // PTRACE_MODE_READ_FSCREDS (seems to be default for same-user)
 
     // TODO: other security things (seccomp)?
     Ok(())
@@ -168,3 +216,4 @@ pub fn lockdown_process(req: &JobRequest, new_root: &Path) -> Result<Vec<BindMou
 
     Ok(mounts)
 }
+// TODO(Ellis): see why tree and eza don't exit
