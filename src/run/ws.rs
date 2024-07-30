@@ -68,7 +68,7 @@ enum WebSocketMessage {
 enum LoopRes {
     Msg(WebSocketMessage),
     ChangeJobRx(JobStateReceiver),
-    JobStart(JobRequest),
+    JobStart((JobRequest, Vec<TestCase>)),
     Pong(Vec<u8>),
     Ping,
     Break,
@@ -136,7 +136,7 @@ async fn websocket_loop(
                             rocket_ws::Message::Text(raw) => {
                                 if let Ok(request) = serde_json::from_str::<WebSocketRequest>(&raw) {
                                     let op = match &request {
-                                        WebSocketRequest::Judge { .. } => JobOperation::Judging(test_cases.clone()),
+                                        WebSocketRequest::Judge { .. } => JobOperation::Judging(test_cases.iter().map(|t| t.stdin.clone()).collect::<Vec<_>>()),
                                         WebSocketRequest::Test { input, .. } => JobOperation::Testing(input.to_string())
                                     };
 
@@ -157,7 +157,7 @@ async fn websocket_loop(
                                             cpu_time: problem.cpu_time,
                                             op
                                         };
-                                        LoopRes::JobStart(job_to_start)
+                                        LoopRes::JobStart((job_to_start, test_cases.clone()))
                                     } else {
                                         LoopRes::Msg(WebSocketMessage::Invalid { error: "Invalid language".to_string() })
                                     }
@@ -206,9 +206,9 @@ async fn websocket_loop(
                     error!("Error sending message: {:?}", e);
                 }
             }
-            LoopRes::JobStart(job) => {
+            LoopRes::JobStart((req, cases)) => {
                 let mut manager = manager_handle.lock().await;
-                let msg = match manager.request_job(job).await {
+                let msg = match manager.request_job(req, cases).await {
                     Ok(_) => WebSocketMessage::RunStarted,
                     Err(why) => WebSocketMessage::RunDenied { reason: why },
                 };

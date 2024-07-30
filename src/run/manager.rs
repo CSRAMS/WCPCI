@@ -10,7 +10,7 @@ use crate::contests::{Contest, Participant};
 use crate::db::{DbPool, DbPoolConnection};
 use crate::error::prelude::*;
 use crate::leaderboard::LeaderboardManagerHandle;
-use crate::problems::{JudgeRun, ProblemCompletion};
+use crate::problems::{JudgeRun, ProblemCompletion, TestCase};
 
 use super::job::JobRequest;
 
@@ -109,7 +109,7 @@ impl RunManager {
         self.language_run_data.get(language_key).cloned()
     }
 
-    async fn start_job(&mut self, request: JobRequest) -> Result<(), String> {
+    async fn start_job(&mut self, request: JobRequest, cases: Vec<TestCase>) -> Result<(), String> {
         if request.program.len() > self.config.max_program_length {
             return Err(format!(
                 "Program too long, max length is {} bytes",
@@ -141,7 +141,7 @@ impl RunManager {
 
         let shutdown_rx_worker = shutdown_rx.clone();
 
-        let worker = Worker::new(request.id, request.clone())
+        let worker = Worker::new(request.id, request.clone(), cases, state_tx)
             .await
             .map_err(|e| {
                 error!("Couldn't create worker: {:?}", e);
@@ -149,9 +149,7 @@ impl RunManager {
             })?;
 
         tokio::spawn(async move {
-            let (state, ran_at) = worker
-                .spawn(state_tx, &request.op, shutdown_rx_worker)
-                .await;
+            let (state, ran_at) = worker.spawn(shutdown_rx_worker).await;
 
             handle.lock().await.take();
             drop(handle);
@@ -299,17 +297,21 @@ impl RunManager {
         }
     }
 
-    pub async fn request_job(&mut self, request: JobRequest) -> Result<(), String> {
+    pub async fn request_job(
+        &mut self,
+        request: JobRequest,
+        cases: Vec<TestCase>,
+    ) -> Result<(), String> {
         if let Some(handle) = self.jobs.get(&request.user_id) {
             let handle = handle.lock().await;
             if handle.is_some() {
                 Err("User already has a job running".to_string())
             } else {
                 drop(handle);
-                self.start_job(request).await
+                self.start_job(request, cases).await
             }
         } else {
-            self.start_job(request).await
+            self.start_job(request, cases).await
         }
     }
 }

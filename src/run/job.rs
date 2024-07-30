@@ -1,6 +1,6 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use chrono::NaiveDateTime;
-use log::{error, info};
+use log::info;
 
 use crate::{
     error::prelude::*,
@@ -10,17 +10,53 @@ use crate::{
 
 use super::{languages::ComputedRunData, runner::Runner};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "msg", rename_all = "camelCase")]
+pub enum JobFailure {
+    Initial(CaseError),
+    Limited(String),
+}
+
+impl JobFailure {
+    pub fn get_message_allow_limited(&self) -> String {
+        match self {
+            JobFailure::Initial(e) => e.to_string(false),
+            JobFailure::Limited(msg) => msg.clone(),
+        }
+    }
+
+    pub fn limited(&self) -> Self {
+        match self {
+            JobFailure::Initial(e) => {
+                let msg = e.to_string(false);
+                JobFailure::Limited(msg)
+            }
+            JobFailure::Limited(msg) => {
+                warn!("Limit called on already limited Failure");
+                warn!("This could be a data exfiltration attempt");
+                warn!("Message:\n{msg}");
+                warn!("Setting to generic message");
+                JobFailure::Limited("Masked Error*".to_string())
+            }
+        }
+    }
+
+    pub fn limit(&mut self) {
+        *self = self.limited();
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(tag = "status", content = "content", rename_all = "camelCase")]
 pub enum CaseStatus {
     #[default]
     Pending,
     Running,
-    // Passed, optional output
-    Passed(Option<String>),
+    // Passed, output
+    Passed(String),
     NotRun,
-    // Penalty, Error
-    Failed(bool, String),
+    /// Penalty, Error
+    Failed(bool, JobFailure),
 }
 
 impl CaseStatus {
@@ -68,7 +104,15 @@ impl JobState {
         }
     }
 
-    pub fn last_error(&self) -> (usize, bool, Option<String>) {
+    pub fn is_judging(&self) -> bool {
+        matches!(self, Self::Judging { .. })
+    }
+
+    pub fn is_testing(&self) -> bool {
+        matches!(self, Self::Testing { .. })
+    }
+
+    pub fn last_error(&self) -> (usize, bool, Option<JobFailure>) {
         match self {
             Self::Judging { cases, .. } => cases
                 .iter()
@@ -119,6 +163,26 @@ impl JobState {
         }
     }
 
+    pub fn force_complete(&mut self) {
+        match self {
+            Self::Judging { complete, cases } => {
+                *complete = true;
+                cases.iter_mut().for_each(|c| match c {
+                    CaseStatus::Pending | CaseStatus::Running => {
+                        *c = CaseStatus::NotRun;
+                    }
+                    _ => {}
+                });
+            }
+            Self::Testing { status } => match status {
+                CaseStatus::Pending | CaseStatus::Running => {
+                    *status = CaseStatus::NotRun;
+                }
+                _ => {}
+            },
+        }
+    }
+
     pub fn force_fail(&mut self, msg: &str) {
         let msg = msg.to_string();
         match self {
@@ -127,10 +191,62 @@ impl JobState {
                     .iter()
                     .position(|c| matches!(c, CaseStatus::Running))
                     .unwrap_or(0);
-                self.complete_case(idx, CaseStatus::Failed(false, msg));
+                self.complete_case(idx, CaseStatus::Failed(false, CaseError::Judge(msg).into()));
             }
             Self::Testing { status } => {
-                *status = CaseStatus::Failed(true, msg);
+                *status = CaseStatus::Failed(true, CaseError::Judge(msg).into());
+            }
+        }
+    }
+
+    pub fn check_against_cases(&mut self, test_cases: &[TestCase]) -> Result {
+        if let JobState::Judging { cases, .. } = self {
+            if cases.len() != test_cases.len() {
+                bail!("Mismatched number of cases");
+            }
+
+            for (case, test_case) in cases.iter_mut().zip(test_cases.iter()) {
+                if let CaseStatus::Passed(stdout) = case {
+                    let res = test_case.check_output(stdout);
+                    match res {
+                        Ok(true) => {
+                            *case = CaseStatus::Passed(stdout.clone());
+                        }
+                        Ok(false) => {
+                            *case = CaseStatus::Failed(true, CaseError::Logic.into());
+                        }
+                        Err(e) => {
+                            let msg = format!(
+                                "Error checking output for test case {}: {:?}",
+                                test_case.id, e
+                            );
+                            *case = CaseStatus::Failed(false, CaseError::Judge(msg).into());
+                        }
+                    }
+                }
+            }
+        };
+
+        Ok(())
+    }
+
+    pub fn limit_all_failures(&mut self) {
+        match self {
+            Self::Judging { cases, .. } => {
+                cases.iter_mut().for_each(|c| {
+                    if let CaseStatus::Failed(_, e) = c {
+                        // Limit all failures when judging
+                        e.limit();
+                    }
+                });
+            }
+            Self::Testing { status } => {
+                if let CaseStatus::Failed(_, e) = status {
+                    if matches!(e, JobFailure::Initial(CaseError::Judge(_))) {
+                        // Only limit judge errors when testing
+                        e.limit();
+                    }
+                }
             }
         }
     }
@@ -160,7 +276,7 @@ impl JobState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JobOperation {
-    Judging(Vec<TestCase>),
+    Judging(Vec<String>),
     Testing(String),
 }
 
@@ -228,13 +344,13 @@ impl Job {
         self.state.start_first();
         self.publish_state();
         if let Err(why) = self.runner.compile() {
-            info!("Job {} Compilation Failed: {:?}", self.id, why);
+            debug!("Job {} Compilation Failed: {:?}", self.id, why);
             if matches!(&self.state, JobState::Testing { .. }) {
                 match why {
                     CaseError::Compilation(e) => {
                         self.state.complete_case(
                             0,
-                            CaseStatus::Failed(false, format!("Compile Error: {}", e)),
+                            CaseStatus::Failed(false, CaseError::Compilation(e).into()),
                         );
                     }
                     _ => {
@@ -247,64 +363,42 @@ impl Job {
             self.publish_state();
             return (self.state, self.started_at);
         }
-        info!(
+        debug!(
             "Job {} Starting, requested by user {}",
             self.id, self.user_id
         );
-        match &self.op {
-            JobOperation::Judging(cases) => {
-                for (i, case) in cases.iter().enumerate() {
-                    info!("Job {} Running Case {}", self.id, i + 1);
-                    let status = match self.runner.run_case(case) {
-                        Ok(_) => CaseStatus::Passed(None),
-                        Err(e) => match &e {
-                            CaseError::Judge(ref why) => {
-                                error!(
-                                    "Job {} Case {} had a judging error: {:?}",
-                                    self.id,
-                                    i + 1,
-                                    why
-                                );
-                                e.into()
-                            }
-                            _ => e.into(),
-                        },
-                    };
-                    info!(
-                        "Job {} Case {} finished with status {:?}",
-                        self.id,
-                        i + 1,
-                        status.to_name()
-                    );
-                    self.state.complete_case(i, status);
-                    self.publish_state();
-                    if self.state.complete() {
-                        break;
-                    }
-                }
-            }
-            JobOperation::Testing(input) => {
-                info!("Job {} Running Test", self.id);
-                let status = match self.runner.run_cmd(input) {
-                    Ok(out) => CaseStatus::Passed(Some(out)),
-                    Err(e) => match &e {
-                        CaseError::Judge(ref why) => {
-                            error!("Job {} Test had a judging error: {:?}", self.id, why);
-                            e.into()
-                        }
-                        CaseError::Runtime(ref msg) => {
-                            CaseStatus::Failed(true, format!("Runtime Error: {}", msg))
-                        }
-                        _ => e.into(),
-                    },
-                };
-                info!(
-                    "Job {} Test finished with status {:?}",
+
+        let cases: Box<dyn Iterator<Item = &String>> = match &self.op {
+            JobOperation::Judging(cases) => Box::new(cases.iter()),
+            JobOperation::Testing(stdin) => Box::new(std::iter::once(stdin)),
+        };
+
+        for (i, case) in cases.enumerate() {
+            debug!("Job {} Running Case {}", self.id, i + 1);
+            let status = match self.runner.run_cmd(case) {
+                Ok(o) => CaseStatus::Passed(o),
+                Err(e) => e.into(),
+            };
+
+            if let CaseStatus::Failed(_, JobFailure::Initial(CaseError::Judge(e))) = &status {
+                error!(
+                    "Job {} Case {} ran into judge error:\n{}",
                     self.id,
-                    status.to_name()
+                    i + 1,
+                    e
                 );
-                self.state.complete_case(0, status);
-                self.publish_state();
+            }
+
+            info!(
+                "Job {} Case {} finished with status {:?}",
+                self.id,
+                i + 1,
+                status.to_name()
+            );
+            self.state.complete_case(i, status);
+            self.publish_state();
+            if self.state.complete() {
+                break;
             }
         }
 

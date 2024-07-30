@@ -14,6 +14,35 @@ export type WebSocketRequest =
           input: string;
       };
 
+export type CaseError =
+    | {
+          err: "logic";
+      }
+    | {
+          err: "runtime";
+          data: string;
+      }
+    | {
+          err: "timeLimitExceeded";
+      }
+    | {
+          err: "compilation";
+          data: string;
+      }
+    | {
+          err: "judge";
+      };
+
+export type JobFailure =
+    | {
+          type: "initial";
+          msg: CaseError;
+      }
+    | {
+          type: "limited";
+          msg: string;
+      };
+
 export type CaseStatus =
     | {
           status: "running";
@@ -27,7 +56,7 @@ export type CaseStatus =
       }
     | {
           status: "failed";
-          content: [boolean, string];
+          content: [boolean, JobFailure];
       }
     | {
           status: "notRun";
@@ -62,6 +91,26 @@ export type WebSocketMessage =
 
 function randomInRange(min: number, max: number) {
     return Math.random() * (max - min) + min;
+}
+
+function getMessageFromFailure(failure: JobFailure): string {
+    switch (failure.type) {
+        case "initial":
+            switch (failure.msg.err) {
+                case "logic":
+                    return "Logic Error";
+                case "runtime":
+                    return `Runtime Error:\n\n${failure.msg.data}`;
+                case "timeLimitExceeded":
+                    return "Time Limit Exceeded";
+                case "compilation":
+                    return `Compilation Error:\n\n${failure.msg.data}`;
+                case "judge":
+                    return "Judge Error";
+            }
+        case "limited":
+            return failure.msg;
+    }
 }
 
 export default (
@@ -144,7 +193,9 @@ export default (
                             const firstWithErr = state.cases.find((c) => c.status === "failed");
                             if (firstWithErr && firstWithErr.status === "failed") {
                                 runMessageWrapper.setAttribute("data-status", "error");
-                                runMessage.innerText = firstWithErr.content[1];
+                                runMessage.innerText = getMessageFromFailure(
+                                    firstWithErr.content[1]
+                                );
                             } else {
                                 runMessageWrapper.setAttribute("data-status", "success");
                                 runMessage.innerText = "All Tests Passed!";
@@ -174,7 +225,7 @@ export default (
                                 testOutput.value = state.status.content ?? "";
                                 break;
                             case "failed":
-                                testOutput.value = state.status.content[1] ?? "";
+                                testOutput.value = getMessageFromFailure(state.status.content[1]);
                                 break;
                         }
                 }

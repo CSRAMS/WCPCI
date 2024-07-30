@@ -3,12 +3,12 @@ use std::process::Stdio;
 
 use log::error;
 
-use crate::problems::TestCase;
-
-use super::job::CaseStatus;
+use super::job::{CaseStatus, JobFailure};
 use super::languages::CommandInfo;
+use super::WorkerMessage;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "err", content = "data", rename_all = "camelCase")]
 pub enum CaseError {
     Logic,
     //TimeLimitExceeded,
@@ -17,17 +17,39 @@ pub enum CaseError {
     Judge(String),
 }
 
+impl From<CaseError> for JobFailure {
+    fn from(val: CaseError) -> Self {
+        Self::Initial(val)
+    }
+}
+
+impl CaseError {
+    pub fn to_string(&self, details: bool) -> String {
+        match self {
+            CaseError::Logic => "Logic Error".to_string(),
+            CaseError::Runtime(ref s) => {
+                if details {
+                    format!("Runtime Error:\n{s}")
+                } else {
+                    "Runtime Error".to_string()
+                }
+            }
+            CaseError::Compilation(ref s) => {
+                if details {
+                    format!("Compilation Error:\n{s}")
+                } else {
+                    "Compilation Error".to_string()
+                }
+            }
+            CaseError::Judge(_) => "Judge Error".to_string(),
+        }
+    }
+}
+
 impl From<CaseError> for CaseStatus {
     fn from(val: CaseError) -> Self {
-        let status = match val {
-            CaseError::Logic => "Logic error".to_string(),
-            //CaseError::TimeLimitExceeded => "Time limit exceeded".to_string(),
-            CaseError::Runtime(_) => "Runtime error".to_string(),
-            CaseError::Compilation(_) => "Compile error".to_string(),
-            CaseError::Judge(_) => "Judge error".to_string(),
-        };
         let penalty = matches!(val, CaseError::Logic | CaseError::Runtime(_));
-        CaseStatus::Failed(penalty, status)
+        CaseStatus::Failed(penalty, val.into())
     }
 }
 
@@ -116,7 +138,27 @@ impl Runner {
             stdout
                 .read_to_string(&mut output)
                 .map_err(|e| CaseError::Judge(format!("Couldn't read stdout: {e:?}")))?;
-            Ok(output)
+
+            let msg = WorkerMessage::RequestCheck(output.clone());
+            let msg = serde_json::to_string(&msg)
+                .map_err(|e| CaseError::Judge(format!("Couldn't serialize message: {e:?}")))?;
+            println!("{}", msg);
+
+            debug!("Awaiting parent check");
+
+            let stdin = std::io::stdin();
+            let mut buf = String::new();
+            stdin
+                .read_line(&mut buf)
+                .map_err(|e| CaseError::Judge(format!("Couldn't read from stdin: {e:?}")))?;
+
+            debug!("Parent check: {:?}", buf);
+
+            if buf.trim().to_lowercase() == "y" {
+                Ok(output)
+            } else {
+                Err(CaseError::Logic)
+            }
         } else {
             let mut stderr = child
                 .stderr
@@ -131,20 +173,5 @@ impl Runner {
                 "Process exited with error {code}:\n\n {std_err}"
             )))
         }
-    }
-
-    pub fn run_case(&self, case: &TestCase) -> CaseResult<String> {
-        let output = self.run_cmd(&case.stdin)?;
-
-        let res = case.check_output(&output, &case.expected_pattern);
-        res.map_err(CaseError::Judge).and_then(
-            |b| {
-                if b {
-                    Ok(output)
-                } else {
-                    Err(CaseError::Logic)
-                }
-            },
-        )
     }
 }
