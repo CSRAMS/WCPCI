@@ -12,7 +12,7 @@ use tokio::{
     select,
 };
 
-use crate::error::prelude::*;
+use crate::{error::prelude::*, run::lockdown};
 
 use super::{
     job::{Job, JobOperation, JobRequest},
@@ -95,8 +95,6 @@ impl Worker {
             .await
             .context("Couldn't write job request to child")?;
 
-        drop(stdin);
-
         let stdout = child.stdout.take().context("Couldn't get child stdout")?;
 
         let mut stdout_reader = tokio::io::BufReader::new(stdout);
@@ -124,6 +122,19 @@ impl Worker {
                         },
                         Ok(WorkerMessage::ChildPid(pid)) => {
                             child_pid = Some(pid);
+                            match lockdown::map_ids(pid) {
+                                Ok(_) => {
+                                    stdin.write_all(b"y\n").await.context("Couldn't write newline to child")?;
+                                },
+                                Err(why) => {
+                                    stdin.write_all(b"n\n").await.context("Couldn't write newline to child")?;
+                                    warn!("Couldn't map child process ids: {}", why);
+                                    last_state.force_fail("JudgeError");
+                                    state_tx.send(last_state.clone()).context("Couldn't send job state")?;
+                                    child.wait().await.context("Couldn't wait for worker process")?;
+                                    return Ok((last_state, chrono::Utc::now().naive_utc()));
+                                }
+                            }
                         },
                         Ok(WorkerMessage::Finished(state, dt)) => {
                             return Ok((state, dt));
@@ -174,7 +185,7 @@ impl Worker {
         let request = serde_json::from_str::<JobRequest>(&buffer)
             .context("Couldn't deserialize job request")?;
 
-        let mounts = super::lockdown::lockdown_process(&request, dir)
+        let _handle = super::lockdown::lockdown_process(&request, dir)
             .context("Couldn't lockdown worker process")?;
 
         drop(stdin_reader);
@@ -187,12 +198,6 @@ impl Worker {
 
         let res = WorkerMessage::Finished(state, completed_at);
         let res = serde_json::to_string(&res).context("Couldn't serialize job result")?;
-
-        for mount in mounts {
-            if let Err(why) = mount.unmount().context("Couldn't unmount bind mount") {
-                error!("Couldn't unmount bind mount: {:?}", why);
-            }
-        }
 
         println!("{}", res);
 

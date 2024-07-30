@@ -133,6 +133,8 @@ impl ComputedRunData {
             lang.compile_cmd.as_ref().and_then(|c| c.resolve_binary()),
             lang.run_cmd.resolve_binary(),
             CommandInfo::where_is("env"), // TODO(Ellis): remove?
+            CommandInfo::where_is("newuidmap"),
+            CommandInfo::where_is("newgidmap"),
         ];
 
         let path_var = binaries

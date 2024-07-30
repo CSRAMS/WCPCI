@@ -82,7 +82,7 @@ monaco_contribution = "rust"
 
 [debug.run.languages.rust.runner]
 file_name = "main.rs"
-# include_bins = [ "cc" ]
+include_bins = [ "cc" ]
 compile_cmd = { binary = "rustc", args = [ "main.rs", "-o", "main" ] }
 run_cmd = { binary = "./main" }
 
