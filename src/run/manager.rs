@@ -50,15 +50,18 @@ impl RunManager {
         leaderboard_manager: LeaderboardManagerHandle,
         pool: DbPool,
         shutdown_rx: ShutdownReceiver,
-    ) -> Self {
+    ) -> Result<Self> {
         let (tx, rx) = tokio::sync::broadcast::channel(10);
         let run_data = config
             .languages
             .iter()
-            .map(|(k, l)| (k.clone(), ComputedRunData::compute(&config, &l.runner)))
-            .collect();
+            .map(|(k, l)| {
+                ComputedRunData::compute(&config, &l.runner).map(|data| (k.clone(), data))
+            })
+            .collect::<Result<_, _>>()
+            .context("Failed to initialize language runner data")?;
 
-        Self {
+        Ok(Self {
             config,
             language_run_data: run_data,
             id_counter: 1,
@@ -68,7 +71,7 @@ impl RunManager {
             job_started_channel: (tx, rx),
             problem_updated_channels: HashMap::with_capacity(5),
             shutdown_rx,
-        }
+        })
     }
 
     pub async fn all_active_jobs(&self) -> Vec<(UserId, i64)> {

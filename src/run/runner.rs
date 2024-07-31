@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
-use std::process::Stdio;
-
-use log::error;
+use std::os::unix::process::ExitStatusExt;
+use std::process::{ExitStatus, Stdio};
 
 use super::job::{CaseStatus, JobFailure};
 use super::languages::CommandInfo;
@@ -93,8 +92,11 @@ impl Runner {
                 .output()
                 .map_err(|e| CaseError::Judge(format!("Couldn't run compile command: {e:?}")))?;
             if !output.status.success() {
+                let std_out = String::from_utf8_lossy(&output.stdout).to_string();
                 let std_err = String::from_utf8_lossy(&output.stderr).to_string();
-                Err(CaseError::Compilation(std_err))
+                let msg = Self::interpret_exit_status(&output.status);
+                let msg = format!("{msg}:\n\nstdout:\n{}\n\nstderr:\n{}", std_out, std_err);
+                Err(CaseError::Compilation(msg))
             } else {
                 Ok(())
             }
@@ -152,7 +154,7 @@ impl Runner {
                 .read_line(&mut buf)
                 .map_err(|e| CaseError::Judge(format!("Couldn't read from stdin: {e:?}")))?;
 
-            debug!("Parent check: {:?}", buf);
+            debug!("Received Parent Check");
 
             if buf.trim().to_lowercase() == "y" {
                 Ok(output)
@@ -167,11 +169,17 @@ impl Runner {
             stderr
                 .read_to_string(&mut std_err)
                 .map_err(|e| CaseError::Judge(format!("Couldn't read stderr: {e:?}")))?;
-            let code = res.code().unwrap_or(-1);
-            error!("Process exited with error {code}:\n\n {std_err}");
-            Err(CaseError::Runtime(format!(
-                "Process exited with error {code}:\n\n {std_err}"
-            )))
+            let msg = Self::interpret_exit_status(&res);
+            Err(CaseError::Runtime(format!("{msg}:\n\n {std_err}")))
         }
+    }
+
+    fn interpret_exit_status(status: &ExitStatus) -> String {
+        let ex = status
+            .code()
+            .map(|code| format!("with exit code {code}"))
+            .or_else(|| status.signal().map(|sig| format!("with signal {sig}")))
+            .unwrap_or_else(|| "unexpectedly".to_string());
+        format!("Process exited {ex}")
     }
 }

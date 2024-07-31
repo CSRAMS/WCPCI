@@ -1,6 +1,6 @@
 use std::{
     fs::Permissions,
-    os::unix::fs::{MetadataExt, PermissionsExt},
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -15,9 +15,9 @@ use nix::{
 
 use crate::{error::prelude::*, run::WorkerMessage};
 
-use super::job::JobRequest;
+use super::{job::JobRequest, seccomp::SockFilter};
 
-fn bind_mount(root: &Path, path: &Path) -> Result {
+fn bind_mount(root: &Path, path: &Path, no_exec: bool) -> Result {
     if !path.is_absolute() {
         bail!("Path must be absolute");
     }
@@ -36,14 +36,18 @@ fn bind_mount(root: &Path, path: &Path) -> Result {
         std::fs::File::create(&full_path).context("Couldn't create expose file")?;
     }
 
-    nix::mount::mount(
-        Some(path),
-        &full_path,
-        None::<&str>,
-        MsFlags::MS_BIND | MsFlags::MS_RDONLY | MsFlags::MS_PRIVATE,
-        None::<&str>,
-    )
-    .context("Couldn't run bind mount syscall")
+    let mut flags = MsFlags::MS_BIND
+        | MsFlags::MS_RDONLY
+        | MsFlags::MS_PRIVATE
+        | MsFlags::MS_NOSUID
+        | MsFlags::MS_NODEV;
+
+    if no_exec {
+        flags |= MsFlags::MS_NOEXEC;
+    }
+
+    nix::mount::mount(Some(path), &full_path, None::<&str>, flags, None::<&str>)
+        .context("Couldn't run bind mount syscall")
 }
 
 fn setup_namespaces() -> Result {
@@ -53,14 +57,17 @@ fn setup_namespaces() -> Result {
             | CloneFlags::CLONE_NEWPID
             | CloneFlags::CLONE_NEWNET
             | CloneFlags::CLONE_NEWIPC
-            | CloneFlags::CLONE_NEWCGROUP,
+            | CloneFlags::CLONE_NEWCGROUP
+            | CloneFlags::CLONE_NEWUTS,
     )
     .context("Couldn't create new namespace(s)")
 }
 
 pub fn map_ids(pid: i32) -> Result {
-    // TODO: Set up uid and gid mappings
-    // Ben: Attempting
+    // TODO: Make this parse /etc/subuid and /etc/subgid
+    // and optionally allow hard coding in config
+    // Also, don't go to active user, go to a sub-uid
+    // Also also, randomize which uid we map to on the outside
 
     Command::new("newuidmap")
         .arg(pid.to_string())
@@ -100,14 +107,24 @@ pub fn map_ids(pid: i32) -> Result {
             Ok(())
         })?;
 
-    // // Setup uid mappings
+    // let new_uid_map = std::fs::read_to_string(format!("/proc/{pid}/uid_map"))
+    //     .context("Couldn't read uid map")?;
+
+    // info!("UID Map: {new_uid_map}");
+
+    // let new_gid_map = std::fs::read_to_string(format!("/proc/{pid}/gid_map"))
+    //     .context("Couldn't read gid map")?;
+
+    // info!("GID Map: {new_gid_map}");
+
+    // Setup uid mappings
     // let uid_map = "0 1000 1\n1 100000 1";
     // std::fs::write(format!("/proc/{pid}/uid_map"), uid_map).context("Couldn't write uid map")?;
 
     // // Deny setgroups
     // std::fs::write(format!("/proc/{pid}/setgroups"), "deny").context("Couldn't write setgroups")?;
 
-    // // Setup gid mappings
+    // Setup gid mappings
     // let gid_map = "0 100 1\n1 100000 1";
     // std::fs::write(format!("/proc/{pid}/gid_map"), gid_map).context("Couldn't write gid map")?;
 
@@ -133,13 +150,25 @@ const DEV_LINKS: [(&str, &str); 4] = [
 ];
 
 fn setup_environment(req: &JobRequest, new_root: &Path) -> Result {
-    // TODO(Ellis): tmpfs root?
     // TODO(Ellis mostly): make all mounts & created directories configurable? (& symlinks)
+
+    // Mount root on a tmpfs
+
+    // TODO: Configure NOEXEC here in config
+    let cwd = std::env::current_dir().context("Couldn't get current directory")?;
+    nix::mount::mount(
+        None::<&str>,
+        &cwd,
+        Some("tmpfs"),
+        MsFlags::MS_NODEV | MsFlags::MS_NOSUID,
+        Some("mode=0755"),
+    )
+    .context("Couldn't mount tmpfs")?;
 
     // Bind mount the expose paths needed for the language to run
 
     for path in &req.language.expose_paths {
-        bind_mount(new_root, path).with_context(|| {
+        bind_mount(new_root, path, false).with_context(|| {
             format!(
                 "Couldn't bind mount expose path ({})",
                 path.to_string_lossy()
@@ -151,7 +180,7 @@ fn setup_environment(req: &JobRequest, new_root: &Path) -> Result {
 
     for path in &DEV_BINDS {
         let dev_path = PathBuf::from(path);
-        bind_mount(new_root, &dev_path).with_context(|| {
+        bind_mount(new_root, &dev_path, true).with_context(|| {
             format!(
                 "Couldn't bind mount dev path ({})",
                 dev_path.to_string_lossy()
@@ -170,7 +199,7 @@ fn setup_environment(req: &JobRequest, new_root: &Path) -> Result {
         None::<&str>,
         &proc_dir,
         Some("proc"),
-        MsFlags::empty(),
+        MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
         None::<&str>,
     )
     .context("Couldn't mount /proc")?;
@@ -191,16 +220,19 @@ fn setup_environment(req: &JobRequest, new_root: &Path) -> Result {
 
     debug!("Creating /tmp directory in new root");
 
+    // Sticky, read/write/execute for all
+    const TEMP_FOLDER_PERMS: u32 = 0o1777;
+
     let tmp_path = new_root.join("tmp");
     std::fs::create_dir_all(&tmp_path).context("Couldn't create /tmp directory in new root")?;
-    std::fs::set_permissions(&tmp_path, Permissions::from_mode(0o1777))
+    std::fs::set_permissions(&tmp_path, Permissions::from_mode(TEMP_FOLDER_PERMS))
         .context("Couldn't set permissions on /tmp directory")?;
 
     debug!("Creating /dev/shm directory in new root");
 
     let shm_path = new_root.join("dev/shm");
     std::fs::create_dir_all(&shm_path).context("Couldn't create /dev/shm directory in new root")?;
-    std::fs::set_permissions(&shm_path, Permissions::from_mode(0o1777))
+    std::fs::set_permissions(&shm_path, Permissions::from_mode(TEMP_FOLDER_PERMS))
         .context("Couldn't set permissions on /dev/shm directory")
 }
 
@@ -214,25 +246,7 @@ fn chroot_jail(new_root: &Path) -> Result {
 
 const HOME_DIR: &str = "/home/runner";
 
-// TODO: If we do a tmpfs root, we won't need this
-pub struct RunnerHandle;
-
-impl Drop for RunnerHandle {
-    fn drop(&mut self) {
-        let runner_path = PathBuf::from(HOME_DIR);
-        if runner_path.exists() {
-            let owner = std::fs::metadata(&runner_path)
-                .context("Couldn't get metadata for runner directory")
-                .map(|m| (m.uid(), m.gid(), m.permissions()));
-            debug!("Owner of {HOME_DIR}: {:?}", owner);
-            std::fs::remove_dir_all(HOME_DIR).unwrap_or_else(|why| {
-                error!("Couldn't remove /runner directory: {:?}", why);
-            });
-        }
-    }
-}
-
-fn setup_user() -> Result<RunnerHandle> {
+fn setup_user() -> Result {
     // Create a working directory for the runner
     std::fs::create_dir_all(HOME_DIR).context("Couldn't create runner directory")?;
 
@@ -242,6 +256,9 @@ fn setup_user() -> Result<RunnerHandle> {
 
     let uid = Uid::from_raw(1);
     let gid = Gid::from_raw(1);
+
+    // Ensure our capabilities aren't kept when we become uid 1
+    nix::sys::prctl::set_keepcaps(false).context("Couldn't set keepcaps to false")?;
 
     // Set all our gids
     nix::unistd::setresgid(gid, gid, gid).context("Couldn't setresgid")?;
@@ -264,27 +281,31 @@ fn setup_user() -> Result<RunnerHandle> {
     std::env::set_current_dir(HOME_DIR)
         .context("Couldn't set current directory to runner directory")?;
 
-    Ok(RunnerHandle)
+    Ok(())
 }
 
-fn harden_process() -> Result {
-    // TODO: Drop capabilities
-    // CAP_DAC_READ_SEARCH - for access to /proc/[pid]/fd
-    // CAP_SYS_PTRACE - to read symlinks under /proc/[pid]/fd/*
-    // Make sure to drop set time capabilities, or do CloneFlags::CLONE_NEWUTS in unshare
-
+fn harden_process(bpf_filter: &[SockFilter]) -> Result {
     // Set dumpable to false
-    // Set secure bits
+    // Set no new privs
+    // TODO: Set secure bits
+    nix::sys::prctl::set_dumpable(false).context("Couldn't set dumpable to false")?;
+    nix::sys::prctl::set_no_new_privs().context("Couldn't set no new privs")?; // This should probably be configurable with the same toggle as clearing bounding cap set
 
     // PTRACE_MODE_READ_FSCREDS (seems to be default for same-user)
 
-    // TODO: other security things (seccomp)?
+    // Setup seccomp syscall filtering
+    let bpf_filter = bpf_filter
+        .iter()
+        .map(|s| s.clone().into())
+        .collect::<Vec<_>>();
+    seccompiler::apply_filter(&bpf_filter).context("Couldn't apply seccomp filter")?;
+
     Ok(())
 }
 
 /// Run to lockdown the running process
 /// This should *only be run in a worker process*
-pub fn lockdown_process(req: &JobRequest, new_root: &Path) -> Result<RunnerHandle> {
+pub fn lockdown_process(req: &JobRequest, new_root: &Path) -> Result {
     // Unshare
     setup_namespaces()?;
 
@@ -325,13 +346,11 @@ pub fn lockdown_process(req: &JobRequest, new_root: &Path) -> Result<RunnerHandl
     chroot_jail(new_root)?;
 
     // Create new user, set uid and gid to new user
-    let runner = setup_user()?;
-
-    debug!("Runner setup complete, we have now dropped to a non-root user");
+    setup_user()?;
 
     // Drop capabilities, setup seccomp, etc
-    harden_process()?;
+    harden_process(&req.language.seccomp_program)?;
 
-    Ok(runner)
+    Ok(())
 }
 // TODO(Ellis): see why tree and eza don't exit

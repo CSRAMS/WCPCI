@@ -35,7 +35,14 @@ email = "email"
 [debug.run]
 max_program_length = 100000
 default_language = "python"
-expose_paths = [ "/nix/store", "/bin/sh", "/usr/bin/env" ] # TODO(Ellis): do this in Nix docker stuff
+expose_paths = [ 
+    "/nix/store", 
+    "/bin/sh", 
+    "/usr/bin/env" 
+] # TODO(Ellis): do this in Nix docker stuff
+
+[debug.run.seccomp]
+# mismatch_action = { action = "log" }
 
 # -- Bash
 

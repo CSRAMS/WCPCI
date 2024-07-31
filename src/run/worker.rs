@@ -185,7 +185,9 @@ impl Worker {
                             return self.get_return();
                         },
                         Err(why) => {
-                            warn!("Worker {}: Couldn't deserialize worker message:\n{}\n\nMessage: \"{}\"", self.id, why, &buf);
+                            if !buf.trim().is_empty() {
+                                warn!("Worker {}: Couldn't deserialize worker message:\n{}\n\nMessage: \"{}\"", self.id, why, &buf);
+                            }
                         }
                     }
                     buf.clear();
@@ -299,7 +301,7 @@ impl Worker {
         let request = serde_json::from_str::<JobRequest>(&buffer)
             .context("Couldn't deserialize job request")?;
 
-        let _handle = super::lockdown::lockdown_process(&request, dir)
+        super::lockdown::lockdown_process(&request, dir)
             .context("Couldn't lockdown worker process")?;
 
         drop(stdin_reader);

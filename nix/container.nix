@@ -11,6 +11,7 @@ dockerTools
   else "buildLayeredImage"
 } {
   # TODO(Spoon): optimize layers?
+  # TODO(Spoon): monitor seccomp audit log on deployment host
   name = "wcpc";
   tag = "latest";
   maxLayers = 125;

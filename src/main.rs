@@ -61,7 +61,12 @@ fn main() {
     }
 }
 
-//#[tokio::main(flavor = "current_thread")]
+#[rocket::main]
+async fn _main() -> Result<(), rocket::Error> {
+    rocket().ignite().await?.launch().await?;
+    Ok(())
+}
+
 fn _worker() {
     WorkerLogger::setup();
     info!("Starting worker...");
@@ -69,12 +74,6 @@ fn _worker() {
     run::Worker::run_from_child(&cwd)
         .map_err(on_worker_fail)
         .expect("Worker failed to start");
-}
-
-#[rocket::main]
-async fn _main() -> Result<(), rocket::Error> {
-    rocket().ignite().await?.launch().await?;
-    Ok(())
 }
 
 fn rocket() -> rocket::Rocket<Build> {

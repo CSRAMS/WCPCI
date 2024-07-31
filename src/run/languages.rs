@@ -1,6 +1,10 @@
 use std::{collections::HashMap, path::PathBuf, process::Command};
 
+use crate::error::prelude::*;
+
 use serde::Deserialize;
+
+use super::seccomp::{BpfConfig, SockFilter};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(crate = "rocket::serde")]
@@ -98,6 +102,9 @@ pub struct RunConfig {
     pub languages: HashMap<String, LanguageConfig>,
     /// Default language to use
     pub default_language: String,
+    /// Settings for seccomp, syscall filtering
+    #[serde(default)]
+    pub seccomp: BpfConfig,
     #[serde(default)]
     pub expose_paths: Vec<String>,
     #[serde(default)]
@@ -122,13 +129,14 @@ pub struct ComputedRunData {
     pub compile_cmd: Option<CommandInfo>,
     pub run_cmd: CommandInfo,
     pub expose_paths: Vec<PathBuf>,
+    pub seccomp_program: Vec<SockFilter>,
     pub environment: HashMap<String, String>,
     pub path_var: String,
     pub file_name: String,
 }
 
 impl ComputedRunData {
-    pub fn compute(run_config: &RunConfig, lang: &LanguageRunnerInfo) -> ComputedRunData {
+    pub fn compute(run_config: &RunConfig, lang: &LanguageRunnerInfo) -> Result<ComputedRunData> {
         let binaries = vec![
             lang.compile_cmd.as_ref().and_then(|c| c.resolve_binary()),
             lang.run_cmd.resolve_binary(),
@@ -163,13 +171,17 @@ impl ComputedRunData {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<HashMap<_, _>>();
 
-        ComputedRunData {
+        let seccomp_program = super::seccomp::compile_filter(run_config)
+            .context("Failed to setup seccomp program")?;
+
+        Ok(ComputedRunData {
             compile_cmd: lang.compile_cmd.clone(),
             environment: env,
             run_cmd: lang.run_cmd.clone(),
             expose_paths,
             file_name: lang.file_name.clone(),
+            seccomp_program,
             path_var,
-        }
+        })
     }
 }

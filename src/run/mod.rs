@@ -14,6 +14,8 @@ mod languages;
 mod lockdown;
 mod manager;
 mod runner;
+mod seccomp;
+mod syscalls;
 mod worker;
 mod ws;
 
@@ -95,14 +97,20 @@ pub fn stage() -> AdHoc {
                     rocket.state::<LeaderboardManagerHandle>().unwrap().clone();
                 let manager =
                     manager::RunManager::new(config.clone(), leaderboard_manager, pool, rx);
-                Ok(rocket
-                    .attach(shutdown_fairing)
-                    .manage::<CodeInfo>(CodeInfo {
-                        run_config: config,
-                        languages_json: code_info,
-                    })
-                    .manage::<ManagerHandle>(Arc::new(Mutex::new(manager)))
-                    .mount("/run", routes![ws::ws_channel]))
+                match manager {
+                    Ok(manager) => Ok(rocket
+                        .attach(shutdown_fairing)
+                        .manage::<CodeInfo>(CodeInfo {
+                            run_config: config,
+                            languages_json: code_info,
+                        })
+                        .manage::<ManagerHandle>(Arc::new(Mutex::new(manager)))
+                        .mount("/run", routes![ws::ws_channel])),
+                    Err(why) => {
+                        error!("{why:?}");
+                        Err(rocket)
+                    }
+                }
             }
         }
     })

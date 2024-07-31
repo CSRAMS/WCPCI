@@ -26,6 +26,7 @@ rocket_oauth2 = "0.5.0"
 rocket_ws = "0.1.0"
 rustc_version_runtime = "0.3.0"
 samael = { version = "0.0.15", features = ["xmlsec"] }
+seccompiler = { version = "0.4.0", features = ["json", "serde", "serde_json"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.114"
 sha1 = "0.10.6"
