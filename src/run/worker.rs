@@ -81,6 +81,10 @@ impl Worker {
         &mut self,
         mut shutdown_rx: ShutdownReceiver,
     ) -> Result<(JobState, NaiveDateTime)> {
+        // TODO(Ben): Better logging for worker runs
+        // On judge error some identifier to allow admins to
+        // look at the logs for the run would be good
+
         let self_path = std::env::current_exe().context("Couldn't get current executable path")?;
 
         let mut child = tokio::process::Command::new(self_path)
