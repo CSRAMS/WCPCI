@@ -1,13 +1,9 @@
 //! Module for setting up the environment for the runner
 //! Includes a pre-chroot setup and a post-chroot setup
 
-use std::{
-    fs::Permissions,
-    os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
-};
+use std::{fs::Permissions, os::unix::fs::PermissionsExt, path::Path};
 
-use super::{mounts::setup_mounts, RUNNER_GID, RUNNER_UID};
+use super::{mounts::setup_mounts, BindMountConfig, RUNNER_GID, RUNNER_UID};
 use crate::error::prelude::*;
 
 const DEV_LINKS: [(&str, &str); 4] = [
@@ -56,7 +52,7 @@ fn setup_env_vars() -> Result {
     std::env::set_current_dir(HOME_DIR).context("Couldn't set current directory to HOME")
 }
 
-pub fn setup_environment(root: &Path, bind_mounts: &[PathBuf]) -> Result {
+pub fn setup_environment(root: &Path, bind_mounts: &[BindMountConfig]) -> Result {
     setup_mounts(root, bind_mounts)?;
 
     for (link_path, target) in DEV_LINKS.iter() {

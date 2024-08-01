@@ -18,7 +18,7 @@ use crate::{
     db::DbConnection,
     error::prelude::*,
     problems::{Problem, TestCase},
-    run::job::{JobOperation, JobRequest},
+    run::{job::JobOperation, manager::ManagerJobRequest},
 };
 
 use super::{JobState, JobStateReceiver, ManagerHandle};
@@ -68,7 +68,7 @@ enum WebSocketMessage {
 enum LoopRes {
     Msg(WebSocketMessage),
     ChangeJobRx(JobStateReceiver),
-    JobStart((JobRequest, Vec<TestCase>)),
+    JobStart(ManagerJobRequest),
     Pong(Vec<u8>),
     Ping,
     Break,
@@ -136,31 +136,20 @@ async fn websocket_loop(
                             rocket_ws::Message::Text(raw) => {
                                 if let Ok(request) = serde_json::from_str::<WebSocketRequest>(&raw) {
                                     let op = match &request {
-                                        WebSocketRequest::Judge { .. } => JobOperation::Judging(test_cases.iter().map(|t| t.stdin.clone()).collect::<Vec<_>>()),
+                                        WebSocketRequest::Judge { .. } => JobOperation::Judging(test_cases.clone()),
                                         WebSocketRequest::Test { input, .. } => JobOperation::Testing(input.to_string())
                                     };
 
-                                    let mut manager = manager_handle.lock().await;
-
-                                    if let Some(language) = manager.get_language_config(request.language()) {
-
-                                        let id = manager.get_request_id();
-
-                                        let job_to_start = JobRequest {
-                                            id,
-                                            user_id,
-                                            problem_id: problem.id,
-                                            contest_id: problem.contest_id,
-                                            program: request.program().to_string(),
-                                            language_key: request.language().to_string(),
-                                            language: language.clone(),
-                                            cpu_time: problem.cpu_time,
-                                            op
-                                        };
-                                        LoopRes::JobStart((job_to_start, test_cases.clone()))
-                                    } else {
-                                        LoopRes::Msg(WebSocketMessage::Invalid { error: "Invalid language".to_string() })
-                                    }
+                                    let job_to_start = ManagerJobRequest {
+                                        user_id,
+                                        problem_id: problem.id,
+                                        contest_id: problem.contest_id,
+                                        program: request.program().to_string(),
+                                        language_key: request.language().to_string(),
+                                        cpu_time: problem.cpu_time,
+                                        op
+                                    };
+                                    LoopRes::JobStart(job_to_start)
                                 } else {
                                     LoopRes::Msg(WebSocketMessage::Invalid { error: "Invalid request".to_string() })
                                 }
@@ -206,9 +195,9 @@ async fn websocket_loop(
                     error!("Error sending message: {:?}", e);
                 }
             }
-            LoopRes::JobStart((req, cases)) => {
+            LoopRes::JobStart(req) => {
                 let mut manager = manager_handle.lock().await;
-                let msg = match manager.request_job(req, cases).await {
+                let msg = match manager.request_job(req).await {
                     Ok(_) => WebSocketMessage::RunStarted,
                     Err(why) => WebSocketMessage::RunDenied { reason: why },
                 };

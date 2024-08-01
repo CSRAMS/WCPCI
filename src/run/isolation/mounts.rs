@@ -9,6 +9,8 @@ use nix::mount::MsFlags;
 
 use crate::error::prelude::*;
 
+use super::BindMountConfig;
+
 const DEV_BINDS: [&str; 4] = ["/dev/null", "/dev/zero", "/dev/random", "/dev/urandom"];
 
 fn bind_mount(root: &Path, path: &Path, no_exec: bool) -> Result {
@@ -55,6 +57,7 @@ fn mount_proc(root: &Path) -> Result {
 
     debug!("Mounting procfs at {}", proc_path.display());
 
+    // TODO: hidepid={1,2}?
     nix::mount::mount(
         None::<&str>,
         &proc_path,
@@ -80,13 +83,17 @@ fn mount_tmpfs(root: &Path) -> Result {
     .context("Couldn't mount tmpfs")
 }
 
-pub fn setup_mounts(root: &Path, bind_mounts: &[PathBuf]) -> Result {
+pub fn setup_mounts(root: &Path, bind_mounts: &[BindMountConfig]) -> Result {
     mount_tmpfs(root)?;
     mount_proc(root)?;
-    for path in bind_mounts {
+    for config in bind_mounts {
         // TODO: Configure NOEXEC per-path
-        bind_mount(root, path, false)
-            .with_context(|| format!("Couldn't bind mount expose path \"{}\"", path.display()))?;
+        bind_mount(root, &config.src, config.no_exec).with_context(|| {
+            format!(
+                "Couldn't bind mount expose path \"{}\"",
+                config.src.display()
+            )
+        })?;
     }
     for dev_path in DEV_BINDS.iter() {
         bind_mount(root, &PathBuf::from(dev_path), true)

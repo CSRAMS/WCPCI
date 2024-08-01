@@ -12,28 +12,49 @@ connecting via a WebSocket all the way down to the actual Runner struct that run
 ## Overall Diagram
 
 ```mermaid
-flowchart TD
+flowchart TB
+
     subgraph B [Browser]
     U([User])
     end
 
-    subgraph MP [Service Process]
+    subgraph RC [Runtime Container]
+        subgraph NP [Worker Process]
+        M[Main File, ../main.rs, wcpc]
+        W2[Worker::run_from_child, worker_side.rs]
+        LK[Process Isolation, isolation/]
+        M--Has arg, calls-->W2
+        W2--Sets up runtime container with-->LK
+        end
+
+        subgraph UP [User Process]
+            UC[User Code]
+        end
+
+        W2--Invokes as directed-->UP
+    end
+
+    subgraph MP [Service / Main Process]
     WS[WebSocket, ws.rs]
-    L[Runner Configuration, config.rs]
+    W2--Communicates over stdin and stdout with-->W1
+    W1-->W2
+    L>Runner Configuration, config.rs]
     RM[RunManager, manager.rs]
     RMC1{Run already in progress?}
-    W1[Worker outside, worker.rs]
+    W1[Worker, service_side.rs]
     WS--Reports Status Back-->U
     L--Configuration-->RM
     U--Requests New Job Over WS-->WS
     WS--Requests a new run from-->RM
     RM-->RMC1
     RMC1--Yes, Deny Run-->WS
-    RMC1--No, Create New-->W1
+    J[run_job, job.rs]
+    RMC1--No, Create New-->J
+    J--Makes New-->W1
     W1--Reports status over-->WS
-    W1-->W1C1{Done?}
+    J-->W1C1{Done?} 
     W1C1--Yes-->W1C2
-    W1C1--No, Continue-->W1
+    W1C1--No, Continue-->J
     W1C2{Is this run a judge run?}
     DBS[(Save to Database)]
     EXIT([Run Done])
@@ -42,27 +63,7 @@ flowchart TD
     W1C2--No-->EXIT
     end
 
-    subgraph RC [Runtime Container]
-        subgraph NP [Worker Process]
-        M[Main File, ../main.rs]
-        W2[Worker::run_from_child, worker.rs]
-        LK[Process Isolation, isolation/]
-        J[Job, job.rs]
-        R[Runner, runner.rs]
-        M--Has arg, calls-->W2
-        W2--Communicates over stdin and stdout with-->W1
-        W1-->W2
-        W2--Sets up runtime container with-->LK
-        W2--Creates new-->J
-        J--Compiles, runs each case with-->R
-        end
-
-        subgraph UP [User Process]
-            UC[User Code]
-        end
-
-        R--Invokes new for compile / each case-->UP
-    end
+    
 
     W1--"Invokes with --worker arg"-->M
 ```
@@ -130,71 +131,45 @@ page is set to listen for updates on the job state, and will update the user's v
 
 The logic for handling all the state updates is a bit complex, but the general idea is as simple as that.
 
-## Worker (worker.rs)
+## Job (job.rs)
 
-The worker.rs file is a bit special because it runs in two different contexts, the first is the service process being called
-from the `RunManager` to start a new job, and the second is in a worker process to actually run the user's code.
+`run_job` is a function that will handle running a job, it will first create a new `Worker` struct and then compile and run the user's code on each test case. It send back state updates
+via a channel to consumers, and will stop running test cases if one fails.
+
+## Worker (worker/)
+
+The worker folder is a bit special because it runs in two different contexts, the first is the service process (`service_side.rs`) and the second is the worker process (`worker_side.rs`).
+
+The `mod.rs` file contains common types between the two.
 
 ### Inside the Service Process
 
-The worker struct is instantiated inside of the service process, it's passed all the info it needs from the run manager
-and handles creating and communicating with the worker process.
+The `Worker` struct is instantiated inside of the service process, it's passed all the info it needs from the job running it and handles creating and communicating with the worker process.
 
-The run manager gives the worker a channel to communicate state updates back through.
+We communicate with the worker process over stdin and stdout, sending it the job to run and receiving back the results. The format is simply JSON messages, with each message being a single line.
 
-We communicate with the worker process over stdin and stdout, sending it the job to run and receiving back the results.
-The format for messages from `Worker` -> `Service` is JSON, and any communication from `Service` -> `Worker` depends on
-what `WorkerMessage` the worker sent previously. The first line of stdin should always be the job request in JSON
-form, however.
+For `stderr`, the service process simply forwards this to the actual `stderr` of the program, this is to allow for easier logging from within the worker process.
 
-For and example of `Service` -> `Worker`, the worker might send `WorkerMessage::RequestCheck`
-to ask the service process to check an output against a test case, in which case the service process is to simply
-print `y` or `n` to stdin.
-
-For `stderr`, the service process simply forwards this to the actual `stderr` of the service process, this is to allow
-for easier logging from within the worker process.
-
-For the JSON messages we ignore any malformed JSON, this is to prevent possible tampering where a user could send
-malformed JSON and mess up the service process's internal state. Any malformed lines of stdout are logged as a warning,
-unless the line is simply an empty string.
-
-It should technically be noted that this struct actually tracks *two* processes due to implementation
-details for process isolation we'll get into later.
-
-#### Job State Validation
-
-We can technically never trust what comes back from the runtime container, there's always a chance someone
-could have say, hijacked `stdout` and sent back a fake result. Due to this we perform two validation checks:
-
-1. We always double-check that output matches test case's expectations, due to this the `Passed` variant of a case's status will hold the output of the user's program, the service process can then perform a check on any cases with `Passed` and ensure the output has actually passed the test case.
-2. We also do some work to limit user output. During test runs the user may see stdout and stdin freely, however during judging we must take extreme caution as to never show the user this as they can exfiltrate the inputs of a test case. To prevent this test case failures can either be `Initial` which contains an enum sometimes with the stdout and stderr and other details, or `Limited` which will only have the message as a string. The service process will automatically limit an error message from the worker if the run type is judge, and if at any point an error is already limited and tries to be limited again it'll be set to simply `Masked Error*`, in case someone is able to mess with the worker in some way to get it to push a Limited error with a custom string set
-
-> Why even have the worker process perform output checking if you're not going to trust it anyway?
-
-This is mostly to save time, most OJ systems will exit upon the first failure, so we allow the worker process to
-do a check and exit early if it fails. This is to save time and resources.
+It should technically be noted that this struct actually tracks *two* processes due to implementation details for process isolation we'll get into later.
 
 ### Invoking a new Worker
 
-To actually start a new worker process we execute our own binary again, but with the `--worker` flag set.
-`main.rs` has special behavior for this flag and will call `Worker::run_from_child` instead of the normal `main` function,
+To actually start a new worker process we execute our own binary again, but with the `--worker` flag set. `main.rs` has special behavior for this flag and will call `worker::worker_side::run_from_child` instead of the normal `main` function,
 which would start Rocket and the entire web server.
 
-The advantage of this over a completely separate binary is simplicity, we can share the same codebase
-without having to worry about creating a monorepo to manager two separate binaries and a shared library between them.
+The advantage of this over a completely separate binary is simplicity, we can share the same codebase without having to worry about creating a monorepo to manager two separate binaries and a shared library between them.
 
 ### Inside the Worker Process
 
-Okay so we've been invoked with `--worker`, now we run the `run_from_child` function. This function will
-first read the job request from stdin
+Okay so we've been invoked with `--worker`, now we ran the `run_from_child` function. This function will first read initial information it needs to setup the worker process from stdin.
 
-Then we'll go through isolation our process, which will be the next section.
+Then we'll go through isolating our process, which will be the next section.
 
-After isolation we create a new `Job` struct, which will handle running the user's code and checking it against.
-This will also be in a separate section.
+After isolation we send `WorkerMessage::Ready` to signify that we're ready for
+commands from the service process. We simply run any `WorkerMessage::RunCmd` commands
+we receive, and break out of this loop upon receiving `WorkerMessage::Stop`.
 
-In the event that we fail in the last two steps, instead of simply exiting we'll send `WorkerMessage::Failure` back
-to the service process, this is to allow the service process to gracefully handle the error instead of relying on waiting
+In the event that we fail in the last two steps, instead of simply exiting we'll send `WorkerMessage::InternalError` back to the service process, this is to allow the service process to gracefully handle the error instead of relying on waiting
 for the worker process to exit and then checking the exit code.
 
 ## Process Isolation
@@ -203,13 +178,11 @@ for the worker process to exit and then checking the exit code.
 > Currently the process isolation is not fully implemented, we're still
 > working on getting everything setup so this section will update in the future.
 
-This is the most complex part of this entire module, and is the most important part of the entire system. We're running
-**completely untrustable** user code, and we must ensure that it can't do anything malicious. Many of the complexities of the
-rest of the run system are due to this isolation.
+This is the most complex part of this entire module, and is the most important part of the entire system. We're running **completely untrustable** user code, and we must ensure
+that it can't do anything malicious. Many of the complexities of the rest of the run 
+system are due to this isolation.
 
-We utilize various security features of the Linux kernel to achieve this, we make many specific syscalls to setup the
-container and therefore this will only work on Linux. Specifically we also only support seccomp filtering on
-x86_64 and aaarch64 as of now.
+We utilize various security features of the Linux kernel to achieve this, we make many specific syscalls to setup the container and therefore this will only work on Linux. Specifically we also only support seccomp filtering on x86_64 and aaarch64 as of now.
 
 ### General Isolation Overview
 
@@ -257,8 +230,8 @@ to any child processes we create, but we're still in the parent process namespac
 `fork`, and continue from the `child` branch of the fork. This will put us in the PID namespace.
 
 To perform this switch our service process needs to be able to know when we fork, otherwise it'll only keep track of
-the parent process and not the child. To do this we send a message (`WorkerMessage::ChildPid`) back to the service process over stdout telling it
-that we've forked, and giving it the child's new PID.
+the parent process and not the child. To do this we send a message (`WorkerMessage::RequestUidGidMap`) back to the service process over stdout telling it that we've forked, and giving it the child's new PID. The name of this message is more related
+to the next step but we combine the two for simplicity.
 
 The service process then knows it should now wait for the child process to exit, and not the parent.
 The parent exits immediately after forking, and the child continues on.
@@ -374,59 +347,13 @@ As a tip, `auditd` does heavy backlogging of messages, and may lose some if you'
 
 ### Running the User's Code
 
-Now that we're isolated, we're ready to run user code. We create a new `Job` struct to handle this, which will be in the next section.
+Now that we're isolated, we're ready to run user code. We send a message back to the service process to let it know we're ready to receive commands, and then we wait for commands to run the user's code.
 
-## Job (job.rs)
+In terms of running them it's pretty simple, we receive a request, call the command, and return the result of the command.
 
-Jobs are in charge of keeping track of the state of each test case. It start out by creating a new `Runner` which
-will handle actually running user commands.
+### Exiting
 
-Jobs will first run the compile command for the user's program via the runner. If this fails it'll be marked as
-a compile error on the first test case.
-
-Next it'll run each test case, pushing state back to the service process via stdout and a `WorkerMessage::StateChange`
-message. The job will also handle logging any judge errors that happen, and will stop midway through if a case fails.
-
-Job is mostly meant as a minimal wrapper around runner, it doesn't do too much but is helpful for performing tests.
-
-### Job State
-
-Job states holder one to many CaseStatus's which hold the state of each test case.
-these statuses can be:
-
-- Pending - The test case has not been run yet
-- Running - The test case is currently running
-- Passed - The test case has passed
-- Failed - The test case has failed
-- NotRun - The test case was not run due to a failure in a previous test case
-
-Failure in a test case contains the error it failed with. This will always be `Initial` in the worker process, but
-the service process will limit this to `Limited` to prevent the user from seeing the input of a test case if this is
-a judge run.
-
-Job state can either be:
-
-- `Judge` - The job is a judge run, and has a list of CaseStatus it must keep track of
-- `Test` - The job is a test run, and has a single CaseStatus it must keep track of
-
-Subsequently `JobState` has many helper functions to interface with the internal state regardless
-of whether it's a judge or test run.
-
-## Runner (runner.rs)
-
-Runner is a lightweight way to run a user program. Its constructor will write the user's program to
-the file specified in the language config. Then consumers are expected to call `compile` and `run_cmd`.
-
-For `compile`, runner doesn't return anything, but `run_cmd` returns a `Result<String, CaseError>` which represents
-whether the user's program failed or not. Runner also automatically checks test cases against the user's output by
-using `WorkerMessage::RequestCheck` to ask the service process to check the output against the test case.
-
-Runner also handles interpreting output of the command and formatting it nice for the user if this is a
-test run so they can see what went wrong. One thing of note is that runner will *not* show stderr of the
-user's program during a test run unless the process exits with a non-zero exit code. This is mostly to keep output clean
-as the user most likely wants to only see what their program printed.
-
-In terms of running the command it's as simple as `std::process::Command`
+After we receive a `WorkerMessage::Stop` we exit, this will cause the service process to know that we're done and to clean up after us. One advantage of a tmpfs and new mount namespace here is we don't have to worry about cleaning up after ourselves, the kernel will do it for us after the last process in the namespace exits.
 
 ## Disclaimer
 
@@ -441,4 +368,4 @@ any container escape could potentially lead to a full system compromise.
 
 In production it may also be worth running WCPC itself inside a container using something like Docker.
 We provide a Nix package that build this container called `container`, you can check out the DEPLOYMENT.md file one
-level up for more detail regarding Docket and deployment in general.
+level up for more detail regarding Docker and deployment in general.

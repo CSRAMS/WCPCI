@@ -5,7 +5,7 @@ use rocket::{fairing::AdHoc, routes};
 use rocket_db_pools::Database as R_Database;
 use tokio::sync::Mutex;
 
-use crate::{db::Database, error::prelude::*, leaderboard::LeaderboardManagerHandle};
+use crate::{db::Database, leaderboard::LeaderboardManagerHandle};
 
 use self::manager::RunManager;
 
@@ -13,8 +13,7 @@ mod config;
 mod isolation;
 mod job;
 mod manager;
-mod runner;
-mod worker;
+pub mod worker;
 mod ws;
 
 pub type JobStateMessage = job::JobState;
@@ -26,25 +25,25 @@ pub type ManagerHandle = Arc<Mutex<RunManager>>;
 
 pub use config::RunConfig;
 pub use job::JobState;
-pub use worker::{Worker, WorkerLogger, WorkerMessage};
 
 pub struct CodeInfo {
     pub run_config: RunConfig,
     pub languages_json: String,
 }
 
-pub async fn make_temp(prefix: &str) -> Result<PathBuf> {
-    let now_nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .context("Couldn't get time since epoch")?
-        .as_nanos();
-    let temp_dir = std::env::temp_dir();
-    let name = format!("{prefix}_{}", now_nanos);
-    let temp_path = temp_dir.join(name);
-    tokio::fs::create_dir_all(&temp_path)
-        .await
-        .context("Couldn't create temp directory")?;
-    Ok(temp_path)
+fn where_is(program: &str) -> Option<PathBuf> {
+    let binary = PathBuf::from(program);
+    if binary.is_absolute() {
+        Some(binary)
+    } else {
+        let path_var = std::env::var("PATH").unwrap_or_default();
+        let paths = std::env::split_paths(&path_var);
+        paths
+            .into_iter()
+            .map(|p| p.join(&binary))
+            .find(|p| p.is_file())
+            .and_then(|p| p.canonicalize().ok())
+    }
 }
 
 pub fn stage() -> AdHoc {

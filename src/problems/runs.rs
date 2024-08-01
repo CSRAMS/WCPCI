@@ -64,7 +64,6 @@ impl JudgeRun {
         ran_at: NaiveDateTime,
     ) -> Self {
         let (amount_run, _, error) = state.last_error();
-        let error = error.map(|e| e.get_message_allow_limited());
         Self::temp(
             problem_id,
             user_id,

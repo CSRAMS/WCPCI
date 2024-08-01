@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::Instant};
 
 use chroot::chroot;
 use environment::{setup_environment, setup_environment_post_chroot};
@@ -10,9 +10,8 @@ use user::su;
 
 use crate::error::prelude::*;
 
-use super::job::JobRequest;
-
 mod chroot;
+mod config;
 mod environment;
 mod harden;
 pub mod id_map;
@@ -22,21 +21,28 @@ mod syscalls;
 mod unshare;
 mod user;
 
+pub use config::*;
+
 const RUNNER_UID: Uid = Uid::from_raw(1000);
 const RUNNER_GID: Gid = Gid::from_raw(100);
 
 /// Isolate a process in a new namespace.
-pub fn isolate(req: &JobRequest, root: &Path) -> Result {
+pub fn isolate(config: &IsolationConfig, root: &Path) -> Result {
     debug!("Isolating Process");
+    let instant = Instant::now();
     unshare().context("Couldn't unshare")?;
     wait_for_id_mapping()?;
-    setup_environment(root, &req.language.expose_paths).context("Couldn't setup environment")?;
+    setup_environment(root, &config.bind_mounts).context("Couldn't setup environment")?;
     chroot(root).context("Couldn't chroot to jail")?;
     setup_environment_post_chroot().context("Couldn't setup environment post chroot")?;
     su().context("Couldn't switch to runner user")?;
     harden_process().context("Couldn't harden process")?;
-    seccomp::install_filters(&req.language.seccomp_program)
-        .context("Couldn't install seccomp filters")?;
-    debug!("Isolation Complete");
+    let program = config
+        .compiled_seccomp_program
+        .as_ref()
+        .context("Seccomp program not compiled")?;
+    seccomp::install_filters(program).context("Couldn't install seccomp filters")?;
+    let elapsed = instant.elapsed();
+    debug!("Isolation Complete ({elapsed:?})");
     Ok(())
 }

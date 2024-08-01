@@ -1,49 +1,21 @@
-use anyhow::{anyhow, bail};
+use core::fmt;
+use std::{
+    fmt::{Display, Formatter},
+    time::Instant,
+};
+
 use chrono::NaiveDateTime;
 
 use crate::{
     error::prelude::*,
     problems::TestCase,
-    run::{runner::CaseError, worker::WorkerMessage},
+    run::worker::{DiagnosticInfo, Worker},
 };
 
-use super::{config::ComputedRunData, runner::Runner};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", content = "msg", rename_all = "camelCase")]
-pub enum JobFailure {
-    Initial(CaseError),
-    Limited(String),
-}
-
-impl JobFailure {
-    pub fn get_message_allow_limited(&self) -> String {
-        match self {
-            JobFailure::Initial(e) => e.to_string(false),
-            JobFailure::Limited(msg) => msg.clone(),
-        }
-    }
-
-    pub fn limited(&self) -> Self {
-        match self {
-            JobFailure::Initial(e) => {
-                let msg = e.to_string(false);
-                JobFailure::Limited(msg)
-            }
-            JobFailure::Limited(msg) => {
-                warn!("Limit called on already limited Failure");
-                warn!("This could be a data exfiltration attempt");
-                warn!("Message:\n{msg}");
-                warn!("Setting to generic message");
-                JobFailure::Limited("Masked Error*".to_string())
-            }
-        }
-    }
-
-    pub fn limit(&mut self) {
-        *self = self.limited();
-    }
-}
+use super::{
+    config::LanguageRunnerInfo, isolation::IsolationConfig, manager::ShutdownReceiver,
+    worker::CaseError, JobStateSender,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(tag = "status", content = "content", rename_all = "camelCase")]
@@ -55,17 +27,24 @@ pub enum CaseStatus {
     Passed(String),
     NotRun,
     /// Penalty, Error
-    Failed(bool, JobFailure),
+    Failed(bool, String),
 }
 
 impl CaseStatus {
-    pub fn to_name(&self) -> &str {
+    pub fn from_case_error(e: CaseError, details: bool) -> Self {
+        let msg = e.to_string(details);
+        Self::Failed(matches!(e, CaseError::Logic | CaseError::Runtime(_)), msg)
+    }
+}
+
+impl Display for CaseStatus {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::Pending => "Pending",
-            Self::Running => "Running",
-            Self::Passed(_) => "Passed",
-            Self::NotRun => "NotRun",
-            Self::Failed(_, _) => "Failed",
+            Self::Pending => write!(f, "[ ]"),
+            Self::Running => write!(f, "[⧗]"),
+            Self::Passed(_) => write!(f, "[🗸]"),
+            Self::NotRun => write!(f, "[/]"),
+            Self::Failed(_, _) => write!(f, "[𐄂]"),
         }
     }
 }
@@ -75,6 +54,7 @@ impl CaseStatus {
 pub enum JobState {
     Judging {
         cases: Vec<CaseStatus>,
+        idx: usize,
         complete: bool,
     },
     Testing {
@@ -86,6 +66,7 @@ impl JobState {
     pub fn new_judging(cases: usize) -> Self {
         Self::Judging {
             cases: vec![CaseStatus::Pending; cases],
+            idx: 0,
             complete: false,
         }
     }
@@ -103,15 +84,11 @@ impl JobState {
         }
     }
 
-    pub fn is_judging(&self) -> bool {
-        matches!(self, Self::Judging { .. })
-    }
-
     pub fn is_testing(&self) -> bool {
         matches!(self, Self::Testing { .. })
     }
 
-    pub fn last_error(&self) -> (usize, bool, Option<JobFailure>) {
+    pub fn last_error(&self) -> (usize, bool, Option<String>) {
         match self {
             Self::Judging { cases, .. } => cases
                 .iter()
@@ -154,7 +131,10 @@ impl JobState {
     pub fn start_first(&mut self) {
         match self {
             Self::Judging { cases, .. } => {
-                cases[0] = CaseStatus::Running;
+                // Shouldn't be empty, but to avoid a panic just in case
+                if let Some(c) = cases.get_mut(0) {
+                    *c = CaseStatus::Running;
+                }
             }
             Self::Testing { status } => {
                 *status = CaseStatus::Running;
@@ -162,124 +142,28 @@ impl JobState {
         }
     }
 
-    pub fn force_complete(&mut self) {
+    pub fn complete_case(&mut self, status: CaseStatus) {
         match self {
-            Self::Judging { complete, cases } => {
-                *complete = true;
-                cases.iter_mut().for_each(|c| match c {
-                    CaseStatus::Pending | CaseStatus::Running => {
-                        *c = CaseStatus::NotRun;
-                    }
-                    _ => {}
-                });
-            }
-            Self::Testing { status } => match status {
-                CaseStatus::Pending | CaseStatus::Running => {
-                    *status = CaseStatus::NotRun;
-                }
-                _ => {}
-            },
-        }
-    }
-
-    pub fn force_fail(&mut self, msg: &str) {
-        let msg = msg.to_string();
-        match self {
-            Self::Judging { cases, .. } => {
-                let idx = cases
-                    .iter()
-                    .position(|c| matches!(c, CaseStatus::Running))
-                    .unwrap_or(0);
-                self.complete_case(idx, CaseStatus::Failed(false, CaseError::Judge(msg).into()));
-            }
-            Self::Testing { status } => {
-                *status = CaseStatus::Failed(false, CaseError::Judge(msg).into());
-            }
-        }
-    }
-
-    pub fn force_stop(&mut self) {
-        match self {
-            Self::Judging { cases, .. } => {
-                let idx = cases
-                    .iter()
-                    .position(|c| matches!(c, CaseStatus::Running))
-                    .unwrap_or(0);
-                self.complete_case(idx, CaseStatus::Failed(false, CaseError::Cancelled.into()));
-            }
-            Self::Testing { status } => {
-                *status = CaseStatus::Failed(false, CaseError::Cancelled.into());
-            }
-        }
-    }
-
-    pub fn check_against_cases(&mut self, test_cases: &[TestCase]) -> Result {
-        if let JobState::Judging { cases, .. } = self {
-            if cases.len() != test_cases.len() {
-                bail!("Mismatched number of cases");
-            }
-
-            for (case, test_case) in cases.iter_mut().zip(test_cases.iter()) {
-                if let CaseStatus::Passed(stdout) = case {
-                    let res = test_case.check_output(stdout);
-                    match res {
-                        Ok(true) => {
-                            *case = CaseStatus::Passed(stdout.clone());
-                        }
-                        Ok(false) => {
-                            *case = CaseStatus::Failed(true, CaseError::Logic.into());
-                        }
-                        Err(e) => {
-                            let msg = format!(
-                                "Error checking output for test case {}: {:?}",
-                                test_case.id, e
-                            );
-                            *case = CaseStatus::Failed(false, CaseError::Judge(msg).into());
-                        }
-                    }
-                }
-            }
-        };
-
-        Ok(())
-    }
-
-    pub fn limit_all_failures(&mut self) {
-        match self {
-            Self::Judging { cases, .. } => {
-                cases.iter_mut().for_each(|c| {
-                    if let CaseStatus::Failed(_, e) = c {
-                        // Limit all failures when judging
-                        e.limit();
-                    }
-                });
-            }
-            Self::Testing { status } => {
-                if let CaseStatus::Failed(_, e) = status {
-                    if matches!(e, JobFailure::Initial(CaseError::Judge(_))) {
-                        // Only limit judge errors when testing
-                        e.limit();
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn complete_case(&mut self, idx: usize, status: CaseStatus) {
-        match self {
-            Self::Judging { cases, complete } => {
-                if idx == cases.len() - 1 {
+            Self::Judging {
+                cases,
+                idx,
+                complete,
+            } => {
+                if *idx == cases.len() - 1 {
                     *complete = true;
                 } else if matches!(&status, CaseStatus::Failed(_, _)) {
                     cases
                         .iter_mut()
-                        .skip(idx + 1)
+                        .skip(*idx + 1)
                         .for_each(|c| *c = CaseStatus::NotRun);
                     *complete = true;
                 } else {
-                    cases[idx + 1] = CaseStatus::Running;
+                    cases[*idx + 1] = CaseStatus::Running;
                 }
-                cases[idx] = status;
+                cases[*idx] = status;
+                if !*complete {
+                    *idx += 1;
+                }
             }
             Self::Testing { status: my_status } => {
                 *my_status = status;
@@ -288,9 +172,26 @@ impl JobState {
     }
 }
 
+impl Display for JobState {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Judging { cases, .. } => {
+                for (i, c) in cases.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{}", c)?;
+                }
+                Ok(())
+            }
+            Self::Testing { status } => write!(f, "{}", status),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JobOperation {
-    Judging(Vec<String>),
+    Judging(Vec<TestCase>),
     Testing(String),
 }
 
@@ -298,131 +199,131 @@ pub enum JobOperation {
 pub struct JobRequest {
     pub id: u64,
     pub user_id: i64,
-    pub contest_id: i64,
     pub problem_id: i64,
+    pub contest_id: i64,
     pub program: String,
     pub language_key: String,
-    pub language: ComputedRunData,
+    pub language: LanguageRunnerInfo,
     pub cpu_time: i64,
     pub op: JobOperation,
 }
 
-pub struct Job {
-    pub id: u64,
-    user_id: i64,
-    runner: Runner,
-    op: JobOperation,
-    pub state: JobState,
-    started_at: NaiveDateTime,
+struct JobContext {
+    id: u64,
+    state: JobState,
+    sender: JobStateSender,
+    ins: Instant,
 }
 
-impl Job {
-    pub fn new(request: JobRequest) -> Result<Self> {
-        let mut state = match request.op {
-            JobOperation::Judging(ref cases) => JobState::new_judging(cases.len()),
-            JobOperation::Testing(_) => JobState::new_testing(),
-        };
+fn publish_state(sender: &JobStateSender, state: JobState) {
+    if let Err(why) = sender.send(state) {
+        error!("Couldn't send state update: {:?}", why);
+    }
+}
 
-        let res = Runner::new(
-            &request.language.compile_cmd,
-            &request.language.run_cmd,
-            &request.language.file_name,
-            &request.program,
-            request.cpu_time,
-        );
-
-        match res {
-            Ok(runner) => {
-                debug!("Job {} Runner created", request.id);
-                Ok(Self {
-                    id: request.id,
-                    runner,
-                    state,
-                    user_id: request.user_id,
-                    op: request.op,
-                    started_at: chrono::offset::Utc::now().naive_utc(),
-                })
-            }
-            Err(e) => {
-                state.complete_case(0, e.clone().into());
-                Err(anyhow!(
-                    "Job {} Couldn't create runner: {:?}",
-                    request.id,
-                    e
-                ))
-            }
+impl JobContext {
+    fn new(req: &JobRequest, sender: JobStateSender) -> Self {
+        Self {
+            id: req.id,
+            ins: Instant::now(),
+            state: JobState::new_for_op(&req.op),
+            sender,
         }
     }
 
-    pub fn run(mut self) -> (JobState, NaiveDateTime) {
-        self.state.start_first();
-        self.publish_state();
-        if let Err(why) = self.runner.compile() {
-            debug!("Job {} Compilation Failed: {:?}", self.id, why);
-            if matches!(&self.state, JobState::Testing { .. }) {
-                match why {
-                    CaseError::Compilation(e) => {
-                        self.state.complete_case(
-                            0,
-                            CaseStatus::Failed(false, CaseError::Compilation(e).into()),
-                        );
-                    }
-                    _ => {
-                        self.state.complete_case(0, why.into());
-                    }
+    pub fn publish_state(&mut self) {
+        let elapsed = self.ins.elapsed();
+        info!("Job {} State: {} ({:?})", self.id, self.state, elapsed);
+        publish_state(&self.sender, self.state.clone());
+        self.ins = Instant::now();
+    }
+}
+
+pub async fn run_job(
+    request: &JobRequest,
+    state_tx: JobStateSender,
+    shutdown_rx: ShutdownReceiver,
+    isolation: &IsolationConfig,
+) -> (JobState, NaiveDateTime) {
+    let started_at = chrono::offset::Utc::now().naive_utc();
+    let tx = state_tx.clone();
+    let rx = state_tx.subscribe();
+    let res = _run_job(
+        state_tx,
+        shutdown_rx,
+        request,
+        request.language.clone(),
+        isolation.clone(),
+    )
+    .await;
+    match res {
+        Ok(state) => (state, started_at),
+        Err(e) => {
+            if let CaseError::Judge(ref e) = e {
+                error!("Job {} Judge Error: {}", request.id, e);
+            }
+            let mut last_state = rx.borrow().clone();
+            let details = last_state.is_testing();
+            last_state.complete_case(CaseStatus::from_case_error(e, details));
+            info!("Job {} State: {}", request.id, last_state);
+            publish_state(&tx, last_state.clone());
+            (last_state, started_at)
+        }
+    }
+}
+
+async fn _run_job(
+    state_tx: JobStateSender,
+    shutdown_rx: ShutdownReceiver,
+    request: &JobRequest,
+    language: LanguageRunnerInfo,
+    isolation: IsolationConfig,
+) -> Result<JobState, CaseError> {
+    let mut ctx = JobContext::new(request, state_tx);
+
+    ctx.state.start_first();
+    ctx.publish_state();
+
+    let diag = DiagnosticInfo {
+        run_id: request.id,
+        user_id: request.user_id,
+        problem_id: request.problem_id,
+        lang: request.language_key.clone(),
+    };
+
+    let mut worker = Worker::new(request.id, request, shutdown_rx, language, isolation, diag)
+        .await
+        .context("Worker Creation Failed")?;
+
+    let res = run_worker(&mut worker, request, &mut ctx).await;
+
+    worker.finish().await?;
+
+    res.map(|_| ctx.state)
+}
+
+async fn run_worker(
+    worker: &mut Worker,
+    request: &JobRequest,
+    ctx: &mut JobContext,
+) -> Result<(), CaseError> {
+    worker.compile().await?;
+    match &request.op {
+        JobOperation::Testing(stdin) => {
+            let output = worker.run_cmd(Some(stdin)).await?;
+            ctx.state.complete_case(CaseStatus::Passed(output));
+            ctx.publish_state();
+        }
+        JobOperation::Judging(cases) => {
+            for case in cases.iter() {
+                let output = worker.run_case(case).await?;
+                ctx.state.complete_case(CaseStatus::Passed(output));
+                ctx.publish_state();
+                if ctx.state.complete() {
+                    break;
                 }
-            } else {
-                self.state.complete_case(0, why.into());
-            }
-            self.publish_state();
-            return (self.state, self.started_at);
-        }
-        debug!(
-            "Job {} Starting, requested by user {}",
-            self.id, self.user_id
-        );
-
-        let cases: Box<dyn Iterator<Item = &String>> = match &self.op {
-            JobOperation::Judging(cases) => Box::new(cases.iter()),
-            JobOperation::Testing(stdin) => Box::new(std::iter::once(stdin)),
-        };
-
-        for (i, case) in cases.enumerate() {
-            debug!("Job {} Running Case {}", self.id, i + 1);
-            let status = match self.runner.run_cmd(case) {
-                Ok(o) => CaseStatus::Passed(o),
-                Err(e) => e.into(),
-            };
-
-            if let CaseStatus::Failed(_, JobFailure::Initial(CaseError::Judge(e))) = &status {
-                error!(
-                    "Job {} Case {} ran into judge error:\n{}",
-                    self.id,
-                    i + 1,
-                    e
-                );
-            }
-
-            debug!(
-                "Job {} Case {} finished with status {:?}",
-                self.id,
-                i + 1,
-                status.to_name()
-            );
-            self.state.complete_case(i, status);
-            self.publish_state();
-            if self.state.complete() {
-                break;
             }
         }
-
-        debug!("Job {} Finished", self.id);
-        (self.state, self.started_at)
     }
-
-    pub fn publish_state(&self) {
-        WorkerMessage::StateChange(self.state.clone())
-            .send()
-            .unwrap();
-    }
+    Ok(())
 }

@@ -2,7 +2,7 @@
 
 use nix::{sched::CloneFlags, unistd::ForkResult};
 
-use crate::{error::prelude::*, run::WorkerMessage};
+use crate::{error::prelude::*, run::worker::WorkerMessage};
 
 fn setup_namespaces() -> Result {
     debug!("Setting up namespaces");
@@ -27,7 +27,7 @@ fn fork_to_child() -> Result {
 
         if let ForkResult::Parent { child } = res {
             debug!("(Parent) Fork complete, sending child PID to service process");
-            WorkerMessage::ChildPid(child.as_raw()).send()?;
+            WorkerMessage::RequestUidGidMap(child.as_raw()).send()?;
             debug!("(Parent) Carry on my fork-ward soooon~");
             std::process::exit(0);
         } else {

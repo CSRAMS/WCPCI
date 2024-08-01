@@ -9,10 +9,7 @@ use seccompiler::{sock_filter, BpfProgram, SeccompAction, SeccompFilter, TargetA
 
 use crate::error::prelude::*;
 
-use super::{
-    super::RunConfig,
-    syscalls::{AARCH64_CALLS, X86_64_CALLS},
-};
+use super::syscalls::{AARCH64_CALLS, X86_64_CALLS};
 
 const fn get_arch() -> TargetArch {
     #[cfg(any(target_arch = "x86_64", target_arch = "x86"))] // Ellis: is target_arch = "x86" i686?
@@ -222,15 +219,13 @@ const BASE_ALLOWED_SYSCALLS: [&str; 98] = [
     "pkey_alloc",
 ];
 
-pub fn compile_filter(run_config: &RunConfig) -> Result<Vec<SockFilter>> {
+pub fn compile_filter(config: &BpfConfig) -> Result<Vec<SockFilter>> {
     let arch = get_arch();
 
     let call_table: HashMap<&str, SyscallNo> = match arch {
         TargetArch::x86_64 => X86_64_CALLS.into_iter().collect(),
         TargetArch::aarch64 => AARCH64_CALLS.into_iter().collect(),
     };
-
-    let config = &run_config.seccomp;
 
     let rules = BASE_ALLOWED_SYSCALLS
         .into_iter()

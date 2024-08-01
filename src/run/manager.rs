@@ -10,12 +10,13 @@ use crate::contests::{Contest, Participant};
 use crate::db::{DbPool, DbPoolConnection};
 use crate::error::prelude::*;
 use crate::leaderboard::LeaderboardManagerHandle;
-use crate::problems::{JudgeRun, ProblemCompletion, TestCase};
+use crate::problems::{JudgeRun, ProblemCompletion};
 
-use super::job::JobRequest;
+use super::isolation::IsolationConfig;
+use super::job::{run_job, JobOperation, JobRequest};
 
-use super::config::{ComputedRunData, RunConfig};
-use super::{JobState, JobStateReceiver, Worker};
+use super::config::{LanguageRunnerInfo, RunConfig};
+use super::{JobState, JobStateReceiver};
 
 type UserId = i64;
 
@@ -34,7 +35,8 @@ pub type ShutDownSender = tokio::sync::watch::Sender<bool>;
 
 pub struct RunManager {
     config: RunConfig,
-    language_run_data: HashMap<String, ComputedRunData>,
+    isolation_config: IsolationConfig,
+    language_runner_info: HashMap<String, LanguageRunnerInfo>,
     id_counter: u64,
     jobs: HashMap<UserId, RunHandle>,
     db_pool: DbPool,
@@ -42,6 +44,16 @@ pub struct RunManager {
     problem_updated_channels: HashMap<i64, ProblemUpdatedSender>,
     leaderboard_handle: LeaderboardManagerHandle,
     shutdown_rx: ShutdownReceiver,
+}
+
+pub struct ManagerJobRequest {
+    pub user_id: UserId,
+    pub problem_id: i64,
+    pub contest_id: i64,
+    pub program: String,
+    pub language_key: String,
+    pub cpu_time: i64,
+    pub op: JobOperation,
 }
 
 impl RunManager {
@@ -52,18 +64,28 @@ impl RunManager {
         shutdown_rx: ShutdownReceiver,
     ) -> Result<Self> {
         let (tx, rx) = tokio::sync::broadcast::channel(10);
+
         let run_data = config
             .languages
             .iter()
             .map(|(k, l)| {
-                ComputedRunData::compute(&config, &l.runner).map(|data| (k.clone(), data))
+                let mut l = l.clone();
+                if let Some(compiled_cmd) = l.runner.compile_cmd.as_mut() {
+                    compiled_cmd.setup()?;
+                }
+                l.runner.run_cmd.setup()?;
+                Ok::<(String, LanguageRunnerInfo), anyhow::Error>((k.clone(), l.runner))
             })
             .collect::<Result<_, _>>()
             .context("Failed to initialize language runner data")?;
 
+        let mut isolation_config = config.isolation.clone();
+        isolation_config.setup()?;
+
         Ok(Self {
             config,
-            language_run_data: run_data,
+            isolation_config,
+            language_runner_info: run_data,
             id_counter: 1,
             leaderboard_handle: leaderboard_manager,
             jobs: HashMap::with_capacity(10),
@@ -102,17 +124,7 @@ impl RunManager {
         }
     }
 
-    pub fn get_request_id(&mut self) -> u64 {
-        let id = self.id_counter;
-        self.id_counter += 1;
-        id
-    }
-
-    pub fn get_language_config(&self, language_key: &str) -> Option<ComputedRunData> {
-        self.language_run_data.get(language_key).cloned()
-    }
-
-    async fn start_job(&mut self, request: JobRequest, cases: Vec<TestCase>) -> Result<(), String> {
+    async fn start_job(&mut self, request: JobRequest) -> Result<(), String> {
         if request.program.len() > self.config.max_program_length {
             return Err(format!(
                 "Program too long, max length is {} bytes",
@@ -142,17 +154,12 @@ impl RunManager {
 
         let leaderboard_handle = self.leaderboard_handle.clone();
 
-        let shutdown_rx_worker = shutdown_rx.clone();
+        let shutdown_rx_job = shutdown_rx.clone();
 
-        let worker = Worker::new(request.id, request.clone(), cases, state_tx)
-            .await
-            .map_err(|e| {
-                error!("Couldn't create worker: {:?}", e);
-                "JudgeError: Couldn't create worker".to_string()
-            })?;
+        let isolation = self.isolation_config.clone();
 
         tokio::spawn(async move {
-            let (state, ran_at) = worker.spawn(shutdown_rx_worker).await;
+            let (state, ran_at) = run_job(&request, state_tx, shutdown_rx_job, &isolation).await;
 
             handle.lock().await.take();
             drop(handle);
@@ -300,21 +307,42 @@ impl RunManager {
         }
     }
 
-    pub async fn request_job(
-        &mut self,
-        request: JobRequest,
-        cases: Vec<TestCase>,
-    ) -> Result<(), String> {
+    fn create_job_request(&mut self, req: ManagerJobRequest) -> Result<JobRequest, String> {
+        let language_info = self
+            .language_runner_info
+            .get(&req.language_key)
+            .ok_or_else(|| format!("Language {} not found", req.language_key))?
+            .clone();
+
+        let id = self.id_counter;
+        self.id_counter += 1;
+
+        Ok(JobRequest {
+            id,
+            user_id: req.user_id,
+            problem_id: req.problem_id,
+            contest_id: req.contest_id,
+            program: req.program,
+            language_key: req.language_key,
+            language: language_info,
+            cpu_time: req.cpu_time,
+            op: req.op,
+        })
+    }
+
+    pub async fn request_job(&mut self, request: ManagerJobRequest) -> Result<(), String> {
         if let Some(handle) = self.jobs.get(&request.user_id) {
             let handle = handle.lock().await;
             if handle.is_some() {
                 Err("User already has a job running".to_string())
             } else {
                 drop(handle);
-                self.start_job(request, cases).await
+                let req = self.create_job_request(request)?;
+                self.start_job(req).await
             }
         } else {
-            self.start_job(request, cases).await
+            let req = self.create_job_request(request)?;
+            self.start_job(req).await
         }
     }
 }

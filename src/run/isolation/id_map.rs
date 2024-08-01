@@ -6,7 +6,7 @@
 use anyhow::bail;
 use tokio::process::Command;
 
-use crate::{error::prelude::*, run::worker::get_stdin_answer};
+use crate::{error::prelude::*, run::worker::ServiceMessage, wait_for_msg};
 
 use super::{RUNNER_GID, RUNNER_UID};
 
@@ -81,7 +81,7 @@ pub async fn map_uid_gid(pid: i32) -> Result {
 /// Run in *worker* to wait for UID / GID mapping
 pub fn wait_for_id_mapping() -> Result {
     debug!("Waiting for UID/GID mapping");
-    get_stdin_answer()
+    wait_for_msg!(ServiceMessage::UidGidMapResult(a) => a)
         .context("Failed to get UID/GID mapping answer")
         .and_then(|b| {
             if b {

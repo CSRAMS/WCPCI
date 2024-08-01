@@ -1,7 +1,5 @@
-use log::info;
 use rocket::{get, routes, Build};
 use rocket_dyn_templates::Template;
-use run::{WorkerLogger, WorkerMessage};
 
 #[macro_use]
 extern crate rocket_dyn_templates;
@@ -44,18 +42,11 @@ async fn md_help(user: Option<&User>) -> Template {
     Template::render("md_help", ctx)
 }
 
-fn on_worker_fail(why: anyhow::Error) {
-    let msg = format!("{:?}", why);
-    error!("{msg}");
-    WorkerMessage::Failed(msg).send().unwrap();
-    std::process::exit(1);
-}
-
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
 
     if args.contains(&"--worker".to_string()) {
-        _worker()
+        run::worker::run_from_child();
     } else {
         _main().expect("Rocket failed to start");
     }
@@ -65,15 +56,6 @@ fn main() {
 async fn _main() -> Result<(), rocket::Error> {
     rocket().ignite().await?.launch().await?;
     Ok(())
-}
-
-fn _worker() {
-    WorkerLogger::setup();
-    info!("Starting Worker...");
-    let cwd = std::env::current_dir().unwrap();
-    run::Worker::run_from_child(&cwd)
-        .map_err(on_worker_fail)
-        .expect("Worker failed to start");
 }
 
 fn rocket() -> rocket::Rocket<Build> {
