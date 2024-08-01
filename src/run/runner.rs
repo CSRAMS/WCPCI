@@ -2,6 +2,8 @@ use std::io::{Read, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
 
+use crate::run::worker::get_stdin_answer;
+
 use super::config::CommandInfo;
 use super::job::{CaseStatus, JobFailure};
 use super::WorkerMessage;
@@ -14,6 +16,7 @@ pub enum CaseError {
     Runtime(String),
     Compilation(String),
     Judge(String),
+    Cancelled,
 }
 
 impl From<CaseError> for JobFailure {
@@ -41,6 +44,7 @@ impl CaseError {
                 }
             }
             CaseError::Judge(_) => "Judge Error".to_string(),
+            CaseError::Cancelled => "Run Cancelled".to_string(),
         }
     }
 }
@@ -141,22 +145,18 @@ impl Runner {
                 .read_to_string(&mut output)
                 .map_err(|e| CaseError::Judge(format!("Couldn't read stdout: {e:?}")))?;
 
-            let msg = WorkerMessage::RequestCheck(output.clone());
-            let msg = serde_json::to_string(&msg)
+            WorkerMessage::RequestCheck(output.clone())
+                .send()
                 .map_err(|e| CaseError::Judge(format!("Couldn't serialize message: {e:?}")))?;
-            println!("{}", msg);
 
-            debug!("Awaiting parent check");
+            debug!("Awaiting service process check");
 
-            let stdin = std::io::stdin();
-            let mut buf = String::new();
-            stdin
-                .read_line(&mut buf)
+            let correct = get_stdin_answer()
                 .map_err(|e| CaseError::Judge(format!("Couldn't read from stdin: {e:?}")))?;
 
-            debug!("Received Parent Check");
+            debug!("Service process check complete");
 
-            if buf.trim().to_lowercase() == "y" {
+            if correct {
                 Ok(output)
             } else {
                 Err(CaseError::Logic)

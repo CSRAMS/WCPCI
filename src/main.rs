@@ -45,9 +45,9 @@ async fn md_help(user: Option<&User>) -> Template {
 }
 
 fn on_worker_fail(why: anyhow::Error) {
-    let msg = WorkerMessage::Failed(format!("{:?}", why));
-    let msg = serde_json::to_string(&msg).unwrap();
-    println!("{}", msg);
+    let msg = format!("{:?}", why);
+    error!("{msg}");
+    WorkerMessage::Failed(msg).send().unwrap();
     std::process::exit(1);
 }
 
@@ -69,7 +69,7 @@ async fn _main() -> Result<(), rocket::Error> {
 
 fn _worker() {
     WorkerLogger::setup();
-    info!("Starting worker...");
+    info!("Starting Worker...");
     let cwd = std::env::current_dir().unwrap();
     run::Worker::run_from_child(&cwd)
         .map_err(on_worker_fail)

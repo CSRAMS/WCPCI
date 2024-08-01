@@ -31,6 +31,9 @@ export type CaseError =
       }
     | {
           err: "judge";
+      }
+    | {
+          err: "cancelled";
       };
 
 export type JobFailure =
@@ -94,6 +97,7 @@ function randomInRange(min: number, max: number) {
 }
 
 function getMessageFromFailure(failure: JobFailure): string {
+    console.debug("Failure", failure);
     switch (failure.type) {
         case "initial":
             switch (failure.msg.err) {
@@ -107,6 +111,8 @@ function getMessageFromFailure(failure: JobFailure): string {
                     return `Compilation Error:\n\n${failure.msg.data}`;
                 case "judge":
                     return "Judge Error";
+                case "cancelled":
+                    return "Run Cancelled";
             }
         case "limited":
             return failure.msg;

@@ -1,3 +1,7 @@
+//! Module for compiling and setting up seccomp filters.
+//! Filters should be compiled by service process and
+//! applied in a worker process.
+
 use std::collections::HashMap;
 
 use anyhow::Ok;
@@ -6,8 +10,8 @@ use seccompiler::{sock_filter, BpfProgram, SeccompAction, SeccompFilter, TargetA
 use crate::error::prelude::*;
 
 use super::{
+    super::RunConfig,
     syscalls::{AARCH64_CALLS, X86_64_CALLS},
-    RunConfig,
 };
 
 const fn get_arch() -> TargetArch {
@@ -254,4 +258,10 @@ pub fn compile_filter(run_config: &RunConfig) -> Result<Vec<SockFilter>> {
         .context("Failed to compile seccomp filter")?;
 
     Ok(compiled.into_iter().map(Into::into).collect())
+}
+
+pub fn install_filters(filters: &[SockFilter]) -> Result {
+    debug!("Applying seccomp filters");
+    let bpf_filter = filters.iter().map(|s| s.clone().into()).collect::<Vec<_>>();
+    seccompiler::apply_filter(&bpf_filter).context("Couldn't apply seccomp filter")
 }

@@ -1,6 +1,5 @@
 use anyhow::{anyhow, bail};
 use chrono::NaiveDateTime;
-use log::info;
 
 use crate::{
     error::prelude::*,
@@ -194,7 +193,22 @@ impl JobState {
                 self.complete_case(idx, CaseStatus::Failed(false, CaseError::Judge(msg).into()));
             }
             Self::Testing { status } => {
-                *status = CaseStatus::Failed(true, CaseError::Judge(msg).into());
+                *status = CaseStatus::Failed(false, CaseError::Judge(msg).into());
+            }
+        }
+    }
+
+    pub fn force_stop(&mut self) {
+        match self {
+            Self::Judging { cases, .. } => {
+                let idx = cases
+                    .iter()
+                    .position(|c| matches!(c, CaseStatus::Running))
+                    .unwrap_or(0);
+                self.complete_case(idx, CaseStatus::Failed(false, CaseError::Cancelled.into()));
+            }
+            Self::Testing { status } => {
+                *status = CaseStatus::Failed(false, CaseError::Cancelled.into());
             }
         }
     }
@@ -319,7 +333,7 @@ impl Job {
 
         match res {
             Ok(runner) => {
-                info!("Job {} Runner created", request.id);
+                debug!("Job {} Runner created", request.id);
                 Ok(Self {
                     id: request.id,
                     runner,
@@ -389,7 +403,7 @@ impl Job {
                 );
             }
 
-            info!(
+            debug!(
                 "Job {} Case {} finished with status {:?}",
                 self.id,
                 i + 1,
@@ -402,13 +416,13 @@ impl Job {
             }
         }
 
-        info!("Job {} Finished", self.id);
+        debug!("Job {} Finished", self.id);
         (self.state, self.started_at)
     }
 
     pub fn publish_state(&self) {
-        let msg = WorkerMessage::StateChange(self.state.clone());
-        let state_str = serde_json::to_string(&msg).unwrap();
-        println!("{}", state_str);
+        WorkerMessage::StateChange(self.state.clone())
+            .send()
+            .unwrap();
     }
 }

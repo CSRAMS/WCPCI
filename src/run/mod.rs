@@ -10,12 +10,10 @@ use crate::{db::Database, error::prelude::*, leaderboard::LeaderboardManagerHand
 use self::manager::RunManager;
 
 mod config;
+mod isolation;
 mod job;
-mod lockdown;
 mod manager;
 mod runner;
-mod seccomp;
-mod syscalls;
 mod worker;
 mod ws;
 

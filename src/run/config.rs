@@ -4,7 +4,7 @@ use crate::error::prelude::*;
 
 use serde::Deserialize;
 
-use super::seccomp::{BpfConfig, SockFilter};
+use super::isolation::seccomp::{BpfConfig, SockFilter};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(crate = "rocket::serde")]
@@ -171,7 +171,7 @@ impl ComputedRunData {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<HashMap<_, _>>();
 
-        let seccomp_program = super::seccomp::compile_filter(run_config)
+        let seccomp_program = super::isolation::seccomp::compile_filter(run_config)
             .context("Failed to setup seccomp program")?;
 
         Ok(ComputedRunData {

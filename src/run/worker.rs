@@ -11,7 +11,7 @@ use tokio::{
     select,
 };
 
-use crate::{error::prelude::*, problems::TestCase, run::lockdown};
+use crate::{error::prelude::*, problems::TestCase, run::isolation};
 
 use super::{
     job::{Job, JobRequest},
@@ -36,6 +36,14 @@ pub enum WorkerMessage {
     ChildPid(i32),
     Finished(JobState, NaiveDateTime),
     Failed(String),
+}
+
+impl WorkerMessage {
+    pub fn send(&self) -> Result {
+        let msg = serde_json::to_string(self).context("Couldn't serialize worker message")?;
+        println!("{}", msg);
+        Ok(())
+    }
 }
 
 impl Worker {
@@ -135,9 +143,9 @@ impl Worker {
                                 continue;
                             }
                             self.child_pid = Some(pid);
-                            match lockdown::map_ids(pid) {
+                            match isolation::id_map::map_uid_gid(pid).await {
                                 Ok(_) => {
-                                    stdin.write_all(b"y\n").await.context("Couldn't write newline to child")?;
+                                    stdin.write_all(STDIN_ANSWER_AFFIRMATIVE_NEWLINE).await.context("Couldn't write newline to child")?;
                                 },
                                 Err(why) => {
                                     stdin.write_all(b"n\n").await.context("Couldn't write newline to child")?;
@@ -148,24 +156,24 @@ impl Worker {
                         },
                         Ok(WorkerMessage::RequestCheck(output)) => {
                             if self.state.is_testing() {
-                                stdin.write_all(b"y\n").await.context("Couldn't write newline to child")?;
+                                stdin.write_all(STDIN_ANSWER_AFFIRMATIVE_NEWLINE).await.context("Couldn't write newline to child")?;
                             }
 
                             if current_idx >= self.test_cases.len() {
                                 warn!("Worker {}: Received more checks than expected", self.id);
                                 warn!("Possible tampering? Ignoring...");
-                                stdin.write_all(b"y\n").await.context("Couldn't write newline to child")?;
+                                stdin.write_all(STDIN_ANSWER_AFFIRMATIVE_NEWLINE).await.context("Couldn't write newline to child")?;
                                 continue;
                             }
                             let case = &self.test_cases.get(current_idx).context("Couldn't get test case")?;
                             match case.check_output(&output) {
                                 Ok(correct) => {
-                                    let yn = if correct { "y\n" } else { "n\n" };
-                                    stdin.write_all(yn.as_bytes()).await.context("Couldn't write newline to child")?;
+                                    let yn = if correct { STDIN_ANSWER_AFFIRMATIVE_NEWLINE } else { b"n\n" };
+                                    stdin.write_all(yn).await.context("Couldn't write newline to child")?;
                                     current_idx += 1;
                                 },
                                 Err(why) => {
-                                    stdin.write_all(b"y\n").await.context("Couldn't write newline to child")?;
+                                    stdin.write_all(STDIN_ANSWER_AFFIRMATIVE_NEWLINE).await.context("Couldn't write newline to child")?;
                                     self.judge_error(&format!("Couldn't check output: {:?}", &why), &mut child).await?;
                                     return self.get_return();
                                 }
@@ -203,7 +211,7 @@ impl Worker {
                     return self.get_return();
                 },
                 _ = shutdown_rx.changed() => {
-                    self.state.force_fail("Run Cancelled");
+                    self.state.force_stop();
                     self.publish_state().await;
                     self.kill_child(&mut child).await?;
                     return self.get_return();
@@ -294,6 +302,8 @@ impl Worker {
     }
 
     pub fn run_from_child(dir: &Path) -> Result {
+        debug!("Reading JobRequest from stdin");
+
         let stdin = std::io::stdin();
         let mut buffer = String::new();
         let mut stdin_reader = BufReader::new(stdin);
@@ -305,21 +315,26 @@ impl Worker {
         let request = serde_json::from_str::<JobRequest>(&buffer)
             .context("Couldn't deserialize job request")?;
 
-        super::lockdown::lockdown_process(&request, dir)
-            .context("Couldn't lockdown worker process")?;
-
         drop(stdin_reader);
 
-        info!("Worker process started and locked");
+        info!(
+            "ID: {}, User ID: {}, Problem ID: {}, Language: {}",
+            request.id, request.user_id, request.problem_id, request.language_key
+        );
+
+        isolation::isolate(&request, dir).context("Couldn't isolate worker")?;
+
+        info!("Worker Started");
 
         let job = Job::new(request).context("Couldn't create job")?;
 
         let (state, completed_at) = job.run();
 
-        let res = WorkerMessage::Finished(state, completed_at);
-        let res = serde_json::to_string(&res).context("Couldn't serialize job result")?;
+        WorkerMessage::Finished(state, completed_at)
+            .send()
+            .context("Couldn't send finished message")?;
 
-        println!("{}", res);
+        info!("Worker Finished");
 
         Ok(())
     }
@@ -382,4 +397,16 @@ impl log::Log for WorkerLogger {
     }
 
     fn flush(&self) {}
+}
+
+const STDIN_ANSWER_AFFIRMATIVE_NEWLINE: &[u8] = b"y\n";
+const STDIN_ANSWER_AFFIRMATIVE: &str = "y";
+
+pub fn get_stdin_answer() -> Result<bool> {
+    let mut buffer = String::new();
+    std::io::stdin()
+        .read_line(&mut buffer)
+        .context("Couldn't read from stdin")?;
+
+    Ok(buffer.trim().to_lowercase() == STDIN_ANSWER_AFFIRMATIVE)
 }
