@@ -9,8 +9,8 @@ use crate::{db::Database, error::prelude::*, leaderboard::LeaderboardManagerHand
 
 use self::manager::RunManager;
 
+mod config;
 mod job;
-mod languages;
 mod lockdown;
 mod manager;
 mod runner;
@@ -26,8 +26,8 @@ pub type JobStateReceiver = tokio::sync::watch::Receiver<JobStateMessage>;
 
 pub type ManagerHandle = Arc<Mutex<RunManager>>;
 
+pub use config::RunConfig;
 pub use job::JobState;
-pub use languages::RunConfig;
 pub use worker::{Worker, WorkerLogger, WorkerMessage};
 
 pub struct CodeInfo {

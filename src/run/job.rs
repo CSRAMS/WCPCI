@@ -8,7 +8,7 @@ use crate::{
     run::{runner::CaseError, worker::WorkerMessage},
 };
 
-use super::{languages::ComputedRunData, runner::Runner};
+use super::{config::ComputedRunData, runner::Runner};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "msg", rename_all = "camelCase")]

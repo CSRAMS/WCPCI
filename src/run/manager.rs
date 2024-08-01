@@ -14,7 +14,7 @@ use crate::problems::{JudgeRun, ProblemCompletion, TestCase};
 
 use super::job::JobRequest;
 
-use super::languages::{ComputedRunData, RunConfig};
+use super::config::{ComputedRunData, RunConfig};
 use super::{JobState, JobStateReceiver, Worker};
 
 type UserId = i64;

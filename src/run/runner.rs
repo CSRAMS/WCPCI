@@ -2,8 +2,8 @@ use std::io::{Read, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
 
+use super::config::CommandInfo;
 use super::job::{CaseStatus, JobFailure};
-use super::languages::CommandInfo;
 use super::WorkerMessage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
