@@ -1,6 +1,7 @@
 ---
 import BreadCrumb from "@/components/BreadCrumb.astro";
 import Button from "@/components/Button.astro";
+import CopyButton from "@/components/CopyButton.astro";
 import Title from "@/components/Title.astro";
 import If from "@/components/tera/If.astro";
 import ContestLayout from "@/layouts/ContestLayout.astro";
@@ -8,6 +9,8 @@ import { variable } from "@/lib/tera";
 import { Icon } from "astro-icon/components";
 
 const url = `${variable("url_prefix()")}/contests/${variable("contest.id")}/export/${variable("user.id")}/${variable("code")}/solutions.git`;
+const cloneCmd = `git clone ${url}`;
+const removeOriginCmd = "git remote remove origin";
 ---
 
 <ContestLayout
@@ -60,9 +63,9 @@ const url = `${variable("url_prefix()")}/contests/${variable("contest.id")}/expo
     </p>
     <h2 class="mt-4 text-2xl font-bold">Manual Clone</h2>
     <p>Alternatively, you can clone the repository with the following command:</p>
-    <code class="select-auto rounded-lg bg-secondary-50 p-2">
-        git clone {url}
-    </code>
-    <p>Then you'll want to remove the remote origin as you won't be able to push to it</p>
-    <code class="select-auto rounded-lg bg-secondary-50 p-2"> git remote remove origin </code>
+    <code class="select-auto rounded-lg bg-secondary-50 p-2">{cloneCmd}</code>
+    <CopyButton copyText={cloneCmd} />
+    <p>Then you'll want to remove the remote origin as it will no longer exist</p>
+    <code class="select-auto rounded-lg bg-secondary-50 p-2">{removeOriginCmd}</code>
+    <CopyButton copyText={removeOriginCmd} />
 </ContestLayout>

@@ -1,0 +1,46 @@
+---
+import Button from "@/components/Button.astro";
+import type { Props as ButtonProps } from "@/components/Button.astro";
+import { variable } from "@/lib/tera";
+import type { HTMLTag } from "astro/types";
+
+type CopyProps =
+    | {
+          copyText: string;
+      }
+    | {
+          copyVar: string;
+          debugCopyVal?: string;
+      };
+
+export type Props<T extends HTMLTag> = ButtonProps<T> & CopyProps;
+
+const { copyText, copyVar, debugCopyVal, class: className, color, icon, ...rest } = Astro.props;
+
+const copyData = copyText
+    ? JSON.stringify(copyText)
+    : variable(`${copyVar} | json_encode()`, debugCopyVal);
+---
+
+<Button
+    class:list={["copy-button w-fit", className]}
+    color={color ?? "secondary"}
+    data-copy={copyData}
+    icon={icon ?? "tabler:clipboard"}
+    {...rest}
+>
+    <slot> Copy to clipboard </slot>
+</Button>
+
+<script>
+    document.addEventListener("astro:page-load", () => {
+        document.querySelectorAll(".copy-button").forEach((button) => {
+            button.addEventListener("click", (e) => {
+                const target = e.target! as HTMLElement;
+                const button = target.closest(".copy-button")! as HTMLButtonElement;
+                const data = JSON.parse(button.dataset.copy!);
+                navigator.clipboard.writeText(data);
+            });
+        });
+    });
+</script>
