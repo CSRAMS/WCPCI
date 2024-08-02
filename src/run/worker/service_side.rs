@@ -18,13 +18,13 @@ use crate::{
     problems::TestCase,
     run::{
         config::{CommandInfo, LanguageRunnerInfo},
-        isolation::{self, IsolationConfig},
         job::JobRequest,
         manager::ShutdownReceiver,
     },
 };
 
 use super::{
+    isolation::{self, IsolationConfig},
     CaseError, CaseResult, CmdResult, DiagnosticInfo, InitialWorkerInfo, ServiceMessage,
     WorkerMessage,
 };

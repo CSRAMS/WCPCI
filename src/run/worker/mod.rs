@@ -2,13 +2,15 @@ use std::{collections::HashMap, fmt::Display, os::unix::process::ExitStatusExt, 
 
 use crate::error::prelude::*;
 
-use super::{config::CommandInfo, isolation::IsolationConfig};
+use super::config::CommandInfo;
 
+mod isolation;
 /// Service process side of the worker
 mod service_side;
 /// Worker process side of the worker
 mod worker_side;
 
+pub use isolation::IsolationConfig;
 pub use service_side::Worker;
 pub use worker_side::run_from_child;
 
@@ -33,7 +35,7 @@ impl Display for DiagnosticInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitialWorkerInfo {
     pub diagnostic_info: DiagnosticInfo,
-    pub isolation_config: IsolationConfig,
+    pub isolation_config: isolation::IsolationConfig,
     pub program: String,
     pub file_name: String,
 }

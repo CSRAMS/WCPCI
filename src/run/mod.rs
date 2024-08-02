@@ -10,7 +10,6 @@ use crate::{db::Database, leaderboard::LeaderboardManagerHandle};
 use self::manager::RunManager;
 
 mod config;
-mod isolation;
 mod job;
 mod manager;
 pub mod worker;

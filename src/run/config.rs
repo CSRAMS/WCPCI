@@ -7,7 +7,7 @@ use crate::error::prelude::*;
 
 use serde::Deserialize;
 
-use super::isolation::{seccomp::BpfConfig, IsolationConfig};
+use super::worker::IsolationConfig;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(crate = "rocket::serde")]
@@ -95,13 +95,6 @@ pub struct RunConfig {
     pub languages: HashMap<String, LanguageConfig>,
     /// Default language to use
     pub default_language: String,
-    /// Settings for seccomp, syscall filtering
-    #[serde(default)]
-    pub seccomp: BpfConfig,
-    #[serde(default)]
-    pub expose_paths: Vec<String>,
-    #[serde(default)]
-    pub env: HashMap<String, String>,
     #[serde(default)]
     pub isolation: IsolationConfig,
     // TODO: Make network configurable

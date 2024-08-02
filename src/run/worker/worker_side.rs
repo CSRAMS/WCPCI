@@ -26,8 +26,7 @@ fn _run_from_child(dir: &Path) -> Result {
 
     info!("{}", init.diagnostic_info);
 
-    super::super::isolation::isolate(&init.isolation_config, dir)
-        .context("Couldn't isolate process")?;
+    super::isolation::isolate(&init.isolation_config, dir).context("Couldn't isolate process")?;
 
     std::fs::write(&init.file_name, &init.program).context("Couldn't write program to file")?;
 

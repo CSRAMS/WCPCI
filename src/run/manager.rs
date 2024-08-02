@@ -12,8 +12,8 @@ use crate::error::prelude::*;
 use crate::leaderboard::LeaderboardManagerHandle;
 use crate::problems::{JudgeRun, ProblemCompletion};
 
-use super::isolation::IsolationConfig;
 use super::job::{run_job, JobOperation, JobRequest};
+use super::worker::IsolationConfig;
 
 use super::config::{LanguageRunnerInfo, RunConfig};
 use super::{JobState, JobStateReceiver};

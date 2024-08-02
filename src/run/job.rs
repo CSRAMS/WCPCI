@@ -13,8 +13,8 @@ use crate::{
 };
 
 use super::{
-    config::LanguageRunnerInfo, isolation::IsolationConfig, manager::ShutdownReceiver,
-    worker::CaseError, JobStateSender,
+    config::LanguageRunnerInfo, manager::ShutdownReceiver, worker::CaseError,
+    worker::IsolationConfig, JobStateSender,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
