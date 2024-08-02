@@ -11,6 +11,7 @@ mod service_side;
 mod worker_side;
 
 pub use isolation::IsolationConfig;
+use nix::sys::signal::Signal;
 pub use service_side::Worker;
 pub use worker_side::run_from_child;
 
@@ -87,12 +88,19 @@ pub struct CmdFailure(CmdOutput, CmdExit);
 
 impl CmdFailure {
     fn interpret_exit_status(&self) -> String {
-        // TODO: Get signal name (nix::sys::signal)
         let ex = self
             .1
             .status
             .map(|code| format!("with exit code {code}"))
-            .or_else(|| self.1.signal.map(|sig| format!("with signal {sig}")))
+            .or_else(|| {
+                self.1.signal.map(|signo| {
+                    if let Some(signame) = Signal::try_from(signo).ok().map(|s| s.as_str()) {
+                        format!("with signal {signame} ({signo})")
+                    } else {
+                        format!("with signal {signo}")
+                    }
+                })
+            })
             .unwrap_or_else(|| "unexpectedly".to_string());
         format!("Process exited {ex}")
     }

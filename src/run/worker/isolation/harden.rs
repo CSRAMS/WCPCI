@@ -4,7 +4,7 @@
 use crate::error::prelude::*;
 
 pub fn harden_process() -> Result {
-    // TODO: Set secure bits
+    // TODO: Set more secure bits?
 
     debug!("Applying misc. hardening to process");
 

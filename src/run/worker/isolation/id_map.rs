@@ -154,7 +154,7 @@ async fn map_ids_with_cmd(prog: &str, pid: i32, id_maps: &[IdMap]) -> Result {
 }
 
 pub async fn map_uid_gid(pid: i32, info: MapInfo) -> Result {
-    // TODO(Ben): Make configurable, allow overriding /etc/subuid and /etc/subgid
+    // TODO(Ben): Make overrides just write the map directly??
 
     map_ids_with_cmd("newuidmap", pid, &[info.0 .0, info.0 .1])
         .await

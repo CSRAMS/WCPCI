@@ -56,13 +56,12 @@ fn mount_proc(root: &Path) -> Result {
 
     debug!("Mounting procfs at {}", proc_path.display());
 
-    // TODO: hidepid={1,2}?
     nix::mount::mount(
         None::<&str>,
         &proc_path,
         Some("proc"),
         MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
-        None::<&str>,
+        Some("hidepid=2"),
     )
     .context("Couldn't run proc mount syscall")
 }
@@ -89,7 +88,6 @@ pub fn mount_root(root: &Path) -> Result {
 pub fn setup_mounts(root: &Path, bind_mounts: &[BindMountConfig]) -> Result {
     mount_proc(root)?;
     for config in bind_mounts {
-        // TODO: Configure NOEXEC per-path
         bind_mount(root, &config.src, config.no_exec).with_context(|| {
             format!(
                 "Couldn't bind mount expose path \"{}\"",

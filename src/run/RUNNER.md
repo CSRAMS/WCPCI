@@ -35,32 +35,32 @@ flowchart TB
     end
 
     subgraph MP [Service / Main Process]
-    WS[WebSocket, ws.rs]
-    W2--Communicates over stdin and stdout with-->W1
-    W1-->W2
-    L>Runner Configuration, config.rs]
-    RM[RunManager, manager.rs]
-    RMC1{Run already in progress?}
-    W1[Worker, service_side.rs]
-    WS--Reports Status Back-->U
-    L--Configuration-->RM
-    U--Requests New Job Over WS-->WS
-    WS--Requests a new run from-->RM
-    RM-->RMC1
-    RMC1--Yes, Deny Run-->WS
-    J[run_job, job.rs]
-    RMC1--No, Create New-->J
-    J--Makes New-->W1
-    W1--Reports status over-->WS
-    J-->W1C1{Done?} 
-    W1C1--Yes-->W1C2
-    W1C1--No, Continue-->J
-    W1C2{Is this run a judge run?}
-    DBS[(Save to Database)]
-    EXIT([Run Done])
-    W1C2--Yes-->DBS
-    DBS-->EXIT
-    W1C2--No-->EXIT
+        WS[WebSocket, ws.rs]
+        W2--Communicates over stdin and stdout with-->W1
+        W1-->W2
+        L>Runner Configuration, config.rs]
+        RM[RunManager, manager.rs]
+        RMC1{Run already in progress?}
+        W1[Worker, service_side.rs]
+        WS--Reports Status Back-->U
+        L--Configuration-->RM
+        U--Requests New Job Over WS-->WS
+        WS--Requests a new run from-->RM
+        RM-->RMC1
+        RMC1--Yes, Deny Run-->WS
+        J[run_job, job.rs]
+        RMC1--No, Create New-->J
+        J--Makes New-->W1
+        W1--Reports status over-->WS
+        J-->W1C1{Done?} 
+        W1C1--Yes-->W1C2
+        W1C1--No, Continue-->J
+        W1C2{Is this run a judge run?}
+        DBS[(Save to Database)]
+        EXIT([Run Done])
+        W1C2--Yes-->DBS
+        DBS-->EXIT
+        W1C2--No-->EXIT
     end
 
     
