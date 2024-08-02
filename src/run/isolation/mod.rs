@@ -4,9 +4,10 @@ use chroot::chroot;
 use environment::{setup_environment, setup_environment_post_chroot};
 use harden::harden_process;
 use id_map::wait_for_id_mapping;
+use mounts::mount_root;
 use nix::unistd::{Gid, Uid};
 use unshare::unshare;
-use user::su;
+use user::{su_root, su_runner};
 
 use crate::error::prelude::*;
 
@@ -32,10 +33,12 @@ pub fn isolate(config: &IsolationConfig, root: &Path) -> Result {
     let instant = Instant::now();
     unshare().context("Couldn't unshare")?;
     wait_for_id_mapping()?;
+    su_root()?;
+    mount_root(root).context("Couldn't mount root")?;
     setup_environment(root, &config.bind_mounts).context("Couldn't setup environment")?;
     chroot(root).context("Couldn't chroot to jail")?;
     setup_environment_post_chroot().context("Couldn't setup environment post chroot")?;
-    su().context("Couldn't switch to runner user")?;
+    su_runner()?;
     harden_process().context("Couldn't harden process")?;
     let program = config
         .compiled_seccomp_program

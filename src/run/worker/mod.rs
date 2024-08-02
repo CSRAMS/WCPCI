@@ -185,7 +185,7 @@ pub enum CaseError {
 
 impl From<anyhow::Error> for CaseError {
     fn from(e: anyhow::Error) -> Self {
-        CaseError::Judge(e.to_string())
+        CaseError::Judge(format!("{e:?}"))
     }
 }
 

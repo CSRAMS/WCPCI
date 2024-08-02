@@ -54,27 +54,19 @@ impl Worker {
         Ok(cmd)
     }
 
-    async fn make_temp(prefix: &str) -> Result<PathBuf> {
+    async fn make_temp(parent: Option<&Path>, prefix: &str) -> Result<PathBuf> {
         let now_nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .context("Couldn't get time since epoch")?
             .as_nanos();
-        let temp_dir = std::env::temp_dir();
+        let default_temp = std::env::temp_dir();
+        let temp_dir = parent.unwrap_or(&default_temp);
         let name = format!("{prefix}_{}", now_nanos);
         let temp_path = temp_dir.join(name);
         tokio::fs::create_dir_all(&temp_path)
             .await
             .context("Couldn't create temp directory")?;
         Ok(temp_path)
-    }
-
-    async fn setup_uid_gid(&mut self) -> Result {
-        let res = isolation::id_map::map_uid_gid(self.child_pid.as_raw())
-            .await
-            .context("Couldn't map UID and GID");
-        self.send_message(ServiceMessage::UidGidMapResult(res.is_ok()))
-            .await?;
-        res
     }
 
     pub async fn new(
@@ -88,8 +80,13 @@ impl Worker {
         let mut env = iso.env.clone();
         env.extend(run.env.clone());
 
+        let map_info = isolation::id_map::get_uid_gid_maps(&iso)
+            .await
+            .context("Couldn't get UID and GID maps")?;
+
         let name = format!("wcpc_worker_{}", id);
-        let tmp_dir = Self::make_temp(&name)
+        let tmp_parent = iso.workers_parent.as_deref();
+        let tmp_dir = Self::make_temp(tmp_parent, &name)
             .await
             .context("Couldn't create temp directory")?;
 
@@ -139,7 +136,13 @@ impl Worker {
                 child_done: false,
             };
 
-            worker.setup_uid_gid().await?;
+            let res = isolation::id_map::map_uid_gid(pid, map_info).await;
+
+            worker
+                .send_message(ServiceMessage::UidGidMapResult(res.is_ok()))
+                .await?;
+            res.context("Couldn't map UID and GID")?;
+
             let msg = worker.wait_for_new_message().await?;
 
             if let WorkerMessage::Ready = msg {
@@ -244,7 +247,7 @@ impl Worker {
         let msg = serde_json::from_str(&buf).context("Couldn't deserialize worker message")?;
         if let WorkerMessage::InternalError(why) = msg {
             self.wait_child()?;
-            bail!("Worker internal error: {:?}", why);
+            bail!("Worker internal error: {}", why);
         } else {
             Ok(msg)
         }

@@ -178,8 +178,8 @@ for the worker process to exit and then checking the exit code.
 > Currently the process isolation is not fully implemented, we're still
 > working on getting everything setup so this section will update in the future.
 
-This is the most complex part of this entire module, and is the most important part of the entire system. We're running **completely untrustable** user code, and we must ensure
-that it can't do anything malicious. Many of the complexities of the rest of the run 
+This is the most complex part of this entire module, and is the most important part of the entire system. We're running **completely un-trustable** user code, and we must ensure
+that it can't do anything malicious. Many of the complexities of the rest of the run
 system are due to this isolation.
 
 We utilize various security features of the Linux kernel to achieve this, we make many specific syscalls to setup the container and therefore this will only work on Linux. Specifically we also only support seccomp filtering on x86_64 and aaarch64 as of now.
@@ -254,12 +254,17 @@ is within the same user namespace as the process it's trying to set a uid mappin
 To get around this we use a command built into most Linux systems called `newuidmap` and `newgidmap`. These commands have
 their capabilities set to allow setting UID, which means they can properly write to `/proc/self/uid_map` and `/proc/self/gid_map`
 with no restrictions. The way they make this secure is by reading `/etc/subuid` and `/etc/subgid` to determine what ranges
-a given user is allowed to map to. So we want to also read that file and pick two random uids in the range to map to.
+a given user is allowed to map to. So we want to also read that file and pick two random ids in the range to map to.
 
-We also have to call this in the service process, so we make the service process run these commands after receiving `WorkerMessage::ChildPid` sent above. Then we want to ensure our child waits to execute until the service process has finished setting up the mappings by waiting on a `y` from stdin. If we get an `n` we exit immediately as the service process has failed to setup the mappings.
+We also have to call this in the service process, so we make the service process run these commands after receiving `WorkerMessage::ChildPid` sent above. Then we want to ensure our child waits to execute until the service process has finished setting up the mappings by waiting on a message from the service process.
 
-We now have two user's within our container, `0` and `1`, and we can switch between them.
-We'll get to setting up uid 1 later, for now we'll stay as root to setup our environment
+Once mapping is we complete we need to do one last thing. We started this process as
+whatever user started the service process (which won't be mapped in our user namespace and will therefore
+be represented as the nobody user). So we need to setuid and setgid back to root (`0`) to make sure our
+next actions will be done under the correct user.
+
+We now have two user's within our container, `0` and `1000`, and we can switch between them.
+We'll get to setting up uid `1000` later, for now we'll stay as root to setup our environment
 
 ### Environment Setup
 

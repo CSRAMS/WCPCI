@@ -52,7 +52,6 @@ fn bind_mount(root: &Path, path: &Path, no_exec: bool) -> Result {
 
 fn mount_proc(root: &Path) -> Result {
     let proc_path = root.join("proc");
-
     std::fs::create_dir_all(&proc_path).context("Couldn't create /proc directory")?;
 
     debug!("Mounting procfs at {}", proc_path.display());
@@ -70,8 +69,8 @@ fn mount_proc(root: &Path) -> Result {
 
 /// Mounts a tmpfs at the given path
 /// Used as our root
-fn mount_tmpfs(root: &Path) -> Result {
-    debug!("Mounting tmpfs at {}", root.display());
+pub fn mount_root(root: &Path) -> Result {
+    debug!("Mounting root tmpfs at {}", root.display());
 
     nix::mount::mount(
         None::<&str>,
@@ -80,11 +79,14 @@ fn mount_tmpfs(root: &Path) -> Result {
         MsFlags::MS_NODEV | MsFlags::MS_NOSUID,
         Some("mode=0755"),
     )
-    .context("Couldn't mount tmpfs")
+    .context("Couldn't mount tmpfs")?;
+
+    std::env::set_current_dir(root).context("Couldn't set current directory to new root")?;
+
+    Ok(())
 }
 
 pub fn setup_mounts(root: &Path, bind_mounts: &[BindMountConfig]) -> Result {
-    mount_tmpfs(root)?;
     mount_proc(root)?;
     for config in bind_mounts {
         // TODO: Configure NOEXEC per-path

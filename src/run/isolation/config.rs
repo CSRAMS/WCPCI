@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, ops::Range, path::PathBuf};
 
 use crate::{error::prelude::*, run::where_is};
 
@@ -16,11 +16,15 @@ pub struct BindMountConfig {
 #[serde(crate = "rocket::serde")]
 pub struct IsolationConfig {
     #[serde(default)]
+    pub workers_parent: Option<PathBuf>,
+    #[serde(default)]
     pub bind_mounts: Vec<BindMountConfig>,
     #[serde(default)]
     include_bins: Vec<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
+    pub override_subuid: Option<Range<u32>>,
+    pub override_subgid: Option<Range<u32>>,
     #[serde(default)]
     seccomp: BpfConfig,
     #[serde(default)]

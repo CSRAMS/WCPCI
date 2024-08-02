@@ -38,6 +38,7 @@ max_program_length = 100000
 default_language = "python"
 
 [debug.run.isolation]
+workers_parent = "/tmp"
 include_bins = [ "cc" ]
 env = { GABAGOOL = "hello" }
 
