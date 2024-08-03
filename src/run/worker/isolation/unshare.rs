@@ -28,7 +28,7 @@ fn fork_to_child() -> Result {
         if let ForkResult::Parent { child } = res {
             debug!("(Parent) Fork complete, sending child PID to service process");
             WorkerMessage::RequestUidGidMap(child.as_raw()).send()?;
-            debug!("(Parent) Carry on my fork-ward soooon~");
+            nix::sys::wait::waitpid(child, None).context("Couldn't wait for child process")?;
             std::process::exit(0);
         } else {
             debug!("(Child) Fork complete, continuing");

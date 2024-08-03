@@ -9,7 +9,7 @@ use anyhow::bail;
 use nix::{errno::Errno, sys::signal, unistd::Pid};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    process::{ChildStdin, ChildStdout, Command},
+    process::{Child, ChildStdin, ChildStdout, Command},
     select,
 };
 
@@ -24,21 +24,25 @@ use crate::{
 };
 
 use super::{
-    isolation::{self, IsolationConfig},
+    isolation::{
+        self,
+        id_map::{map_uid_gid, MapInfo},
+        IsolationConfig,
+    },
     CaseError, CaseResult, CmdResult, DiagnosticInfo, InitialWorkerInfo, ServiceMessage,
     WorkerMessage,
 };
 
 pub struct Worker {
     tmp_dir: PathBuf,
-    child_pid: Pid,
+    child: Child,
+    sub_child_pid: Option<Pid>,
     shutdown_rx: ShutdownReceiver,
     compile_cmd: Option<CommandInfo>,
     run_cmd: CommandInfo,
     stdin: ChildStdin,
     env: HashMap<String, String>,
     stdout: BufReader<ChildStdout>,
-    child_done: bool,
 }
 
 impl Worker {
@@ -82,7 +86,7 @@ impl Worker {
 
         let map_info = isolation::id_map::get_uid_gid_maps(&iso)
             .await
-            .context("Couldn't get UID and GID maps")?;
+            .context("Couldn't allocate UID and GID maps")?;
 
         let name = format!("wcpc_worker_{}", id);
         let tmp_parent = iso.workers_parent.as_deref();
@@ -90,68 +94,66 @@ impl Worker {
             .await
             .context("Couldn't create temp directory")?;
 
+        let mut child = Self::create_command(&tmp_dir)?
+            .spawn()
+            .context("Couldn't spawn worker")?;
+
+        let stdin = child.stdin.take().context("Couldn't take child stdin")?;
+        let stdout = child.stdout.take().context("Couldn't take child stdout")?;
+        let stdout_reader = BufReader::new(stdout);
+
+        let mut worker = Self {
+            tmp_dir,
+            compile_cmd: run.compile_cmd.clone(),
+            run_cmd: run.run_cmd.clone(),
+            env,
+            shutdown_rx,
+            child,
+            sub_child_pid: None,
+            stdin,
+            stdout: stdout_reader,
+        };
+
+        worker.init(req, diag, iso, run, map_info).await?;
+
+        Ok(worker)
+    }
+
+    async fn init(
+        &mut self,
+        req: &JobRequest,
+        diag: DiagnosticInfo,
+        iso: IsolationConfig,
+        run: LanguageRunnerInfo,
+        map_info: MapInfo,
+    ) -> Result {
         let msg = ServiceMessage::InitialInfo(InitialWorkerInfo {
             diagnostic_info: diag,
             isolation_config: iso,
             program: req.program.to_string(),
             file_name: run.file_name,
-        })
-        .serialize()?;
-        let msg = format!("{}\n", msg);
+        });
 
-        let mut child = Self::create_command(&tmp_dir)?
-            .spawn()
-            .context("Couldn't spawn worker")?;
+        self.send_message(msg).await?;
 
-        let stdout = child.stdout.take().context("Couldn't get worker stdout")?;
-        let mut stdout_reader = tokio::io::BufReader::new(stdout);
-
-        let mut stdin = child.stdin.take().context("Couldn't get worker stdin")?;
-        stdin
-            .write_all(msg.as_bytes())
-            .await
-            .context("Couldn't write initial message to worker")?;
-
-        let mut buf = String::new();
-        stdout_reader
-            .read_line(&mut buf)
-            .await
-            .context("Couldn't read worker response")?;
-
-        let msg: WorkerMessage =
-            serde_json::from_str(&buf).context("Couldn't deserialize worker response")?;
+        let msg = self.wait_for_new_message().await?;
 
         if let WorkerMessage::RequestUidGidMap(pid) = msg {
-            child.wait().await.context("Couldn't wait for worker")?;
+            self.sub_child_pid = Some(Pid::from_raw(pid));
 
-            let mut worker = Self {
-                tmp_dir,
-                compile_cmd: run.compile_cmd.clone(),
-                run_cmd: run.run_cmd.clone(),
-                env,
-                shutdown_rx,
-                child_pid: Pid::from_raw(pid),
-                stdin,
-                stdout: stdout_reader,
-                child_done: false,
-            };
+            let res = map_uid_gid(pid, map_info).await;
 
-            let res = isolation::id_map::map_uid_gid(pid, map_info).await;
-
-            worker
-                .send_message(ServiceMessage::UidGidMapResult(res.is_ok()))
+            self.send_message(ServiceMessage::UidGidMapResult(res.is_ok()))
                 .await?;
             res.context("Couldn't map UID and GID")?;
 
-            let msg = worker.wait_for_new_message().await?;
+            let msg = self.wait_for_new_message().await?;
 
             if let WorkerMessage::Ready = msg {
-                Ok(worker)
+                Ok(())
             } else {
                 bail!("Unexpected worker response: {:?}", msg);
             }
-        } else if let WorkerMessage::InternalError(why) = msg {
-            bail!("Worker internal error: {:?}", why);
         } else {
             bail!("Unexpected worker response: {:?}", msg);
         }
@@ -174,18 +176,8 @@ impl Worker {
     pub async fn run_cmd(&mut self, stdin: Option<&str>) -> CaseResult<String> {
         // Sleep for a bit of pizzaz
         tokio::time::sleep(Duration::from_millis(250)).await;
-
-        let mut shutdown_rx = self.shutdown_rx.clone();
-
-        select! {
-            res = self.exec_cmd(self.run_cmd.clone(), stdin.map(|s| s.to_string())) => {
-                res
-            }
-            _ = shutdown_rx.changed() => {
-                self.kill_child()?;
-                Err(CaseError::Cancelled)
-            }
-        }
+        self.exec_cmd(self.run_cmd.clone(), stdin.map(|s| s.to_string()))
+            .await
     }
 
     pub async fn run_case(&mut self, case: &TestCase) -> CaseResult<String> {
@@ -200,8 +192,12 @@ impl Worker {
     }
 
     pub async fn finish(mut self) -> Result {
-        self.send_message(ServiceMessage::Stop).await?;
-        self.wait_child()
+        if self.child.id().is_some() {
+            self.send_message(ServiceMessage::Stop).await?;
+            self.wait_child().await
+        } else {
+            Ok(())
+        }
     }
 
     async fn exec_cmd(&mut self, cmd: CommandInfo, stdin: Option<String>) -> CaseResult<String> {
@@ -224,7 +220,7 @@ impl Worker {
                 }
             }
             _ = shutdown_rx.changed() => {
-                self.kill_child()?;
+                self.kill_child().await?;
                 Err(CaseError::Cancelled)
             }
         }
@@ -246,46 +242,54 @@ impl Worker {
             .context("Couldn't read worker message")?;
         let msg = serde_json::from_str(&buf).context("Couldn't deserialize worker message")?;
         if let WorkerMessage::InternalError(why) = msg {
-            self.wait_child()?;
+            self.wait_child().await?;
             bail!("Worker internal error: {}", why);
         } else {
             Ok(msg)
         }
     }
 
-    fn wait_child(&mut self) -> Result {
-        if self.child_done {
-            return Ok(());
-        }
-
-        if let Err(why) = nix::sys::wait::waitpid(self.child_pid, None) {
-            if matches!(why, Errno::ECHILD) {
-                self.child_done = true;
-            } else {
-                warn!("Couldn't wait for child process: {}\nForce killing...", why);
-                self.kill_child()?;
-            }
-        } else {
-            self.child_done = true;
-        }
-
+    async fn wait_child(&mut self) -> Result {
+        // TODO: timeout
+        self.child
+            .wait()
+            .await
+            .context("Couldn't wait for worker process")?;
         Ok(())
     }
 
-    fn kill_child(&mut self) -> Result {
-        if self.child_done {
-            return Ok(());
-        }
-
-        let res = nix::sys::signal::kill(self.child_pid, signal::SIGKILL);
-        match res {
-            Ok(_) => {
-                self.child_done = true;
-                Ok(())
+    fn kill_sub_child(&mut self) -> Result {
+        if let Some(pid) = self.sub_child_pid {
+            let res = nix::sys::signal::kill(pid, signal::Signal::SIGKILL);
+            match res {
+                Ok(_) | Err(Errno::ESRCH) => {}
+                Err(e) => bail!("Couldn't kill sub-child process: {:?}", e),
             }
-            Err(Errno::ESRCH) => Ok(()),
-            Err(why) => Err(why).context("Couldn't kill worker process"),
         }
+        Ok(())
+    }
+
+    async fn kill_child(&mut self) -> Result {
+        self.kill_sub_child()?;
+        if self.child.id().is_some() {
+            self.child
+                .kill()
+                .await
+                .context("Couldn't kill worker process")?;
+        }
+        self.wait_child().await?;
+        Ok(())
+    }
+
+    fn kill_child_sync(&mut self) -> Result {
+        self.kill_sub_child()?;
+        if let Some(pid) = self.child.id() {
+            let pid = Pid::from_raw(pid as i32);
+            nix::sys::signal::kill(pid, signal::Signal::SIGKILL)
+                .context("Couldn't kill worker process")?;
+            nix::sys::wait::waitpid(pid, None).context("Couldn't wait for worker process")?;
+        }
+        Ok(())
     }
 }
 
@@ -297,11 +301,11 @@ impl Drop for Worker {
                 error!("{e:?}");
             }
         }
-        if !self.child_done {
-            let res = self.kill_child();
-            if let Err(e) = res {
-                error!("{e:?}");
-            }
+        if self.child.id().is_some() {
+            warn!("Worker dropped without being finished, attempting kill...");
+        }
+        if let Err(why) = self.kill_child_sync() {
+            error!("Couldn't kill worker: {:?}", why);
         }
     }
 }

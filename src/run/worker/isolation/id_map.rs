@@ -119,7 +119,7 @@ async fn get_range_for(path: &str, over: &Option<Range<u32>>) -> Result<SubIdRan
 /// Root user id map, Runner user id map
 type MapPair = (IdMap, IdMap);
 /// UID maps, GID maps
-type MapInfo = (MapPair, MapPair);
+pub type MapInfo = (MapPair, MapPair);
 
 pub async fn get_uid_gid_maps(iso: &IsolationConfig) -> Result<MapInfo> {
     let uid_range = get_range_for("/etc/subuid", &iso.override_subuid)
