@@ -142,6 +142,8 @@ pub enum WorkerMessage {
     InternalError(String),
     /// Service process is ready to receive commands.
     Ready,
+    /// Not technically from the worker, used signify when a wait for message was cancelled
+    Cancelled,
 }
 
 impl WorkerMessage {

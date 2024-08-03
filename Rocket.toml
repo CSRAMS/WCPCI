@@ -49,7 +49,7 @@ src = "/nix/store"
 src = "/bin/sh"
 
 [[debug.run.isolation.bind_mounts]]
-src =  "/usr/bin/env"
+src = "/usr/bin/env"
 
 [debug.run.isolation.seccomp]
 # mismatch_action = { action = "log" }

@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    future::Future,
     path::{Path, PathBuf},
     process::Stdio,
     time::Duration,
@@ -43,6 +44,14 @@ pub struct Worker {
     stdin: ChildStdin,
     env: HashMap<String, String>,
     stdout: BufReader<ChildStdout>,
+}
+
+enum WaitForResult<T> {
+    Ok(T),
+    Cancelled,
+    // TODO: Add hard timeout, runner config option?
+    #[allow(dead_code)]
+    HardTimeout,
 }
 
 impl Worker {
@@ -203,26 +212,19 @@ impl Worker {
     async fn exec_cmd(&mut self, cmd: CommandInfo, stdin: Option<String>) -> CaseResult<String> {
         let msg = ServiceMessage::RunCmd(cmd.clone(), stdin, self.env.clone());
         self.send_message(msg).await?;
-        let mut shutdown_rx = self.shutdown_rx.clone();
 
-        select! {
-            msg = self.wait_for_new_message() => {
-                if let WorkerMessage::CmdComplete(res) = msg? {
-                    match res {
-                        CmdResult::Success(output) => {
-                            let output = output.stdout;
-                            Ok(output)
-                        }
-                        CmdResult::Failure(failure) => Err(CaseError::Runtime(failure.to_string())),
-                    }
-                } else {
-                    Err(CaseError::Judge("Unexpected worker response".to_string()))
+        let msg = self.wait_for_new_message().await?;
+
+        match msg {
+            WorkerMessage::CmdComplete(res) => match res {
+                CmdResult::Success(output) => {
+                    let output = output.stdout;
+                    Ok(output)
                 }
-            }
-            _ = shutdown_rx.changed() => {
-                self.kill_child().await?;
-                Err(CaseError::Cancelled)
-            }
+                CmdResult::Failure(failure) => Err(CaseError::Runtime(failure.to_string())),
+            },
+            WorkerMessage::Cancelled => Err(CaseError::Cancelled),
+            _ => Err(anyhow!("Unexpected worker response: {:?}", msg).into()),
         }
     }
 
@@ -236,26 +238,63 @@ impl Worker {
 
     async fn wait_for_new_message(&mut self) -> Result<WorkerMessage> {
         let mut buf = String::new();
-        self.stdout
-            .read_line(&mut buf)
-            .await
-            .context("Couldn't read worker message")?;
-        let msg = serde_json::from_str(&buf).context("Couldn't deserialize worker message")?;
-        if let WorkerMessage::InternalError(why) = msg {
-            self.wait_child().await?;
-            bail!("Worker internal error: {}", why);
-        } else {
-            Ok(msg)
+        let shutdown_rx = self.shutdown_rx.clone();
+
+        let res = Self::wait_for(self.stdout.read_line(&mut buf), shutdown_rx).await;
+
+        match res {
+            WaitForResult::Ok(res) => {
+                res.context("Couldn't read worker message")?;
+                let msg =
+                    serde_json::from_str(&buf).context("Couldn't deserialize worker message")?;
+                if let WorkerMessage::InternalError(why) = msg {
+                    self.wait_child().await?;
+                    bail!("Worker internal error: {}", why);
+                } else {
+                    Ok(msg)
+                }
+            }
+            WaitForResult::Cancelled => Ok(WorkerMessage::Cancelled),
+            // TODO: Should this be a user error? Penalty?
+            WaitForResult::HardTimeout => {
+                self.kill_child().await?;
+                bail!("Worker process timed out");
+            }
         }
     }
 
     async fn wait_child(&mut self) -> Result {
-        // TODO: timeout
-        self.child
-            .wait()
-            .await
-            .context("Couldn't wait for worker process")?;
+        let shutdown_rx = self.shutdown_rx.clone();
+        let res = Self::wait_for(self.child.wait(), shutdown_rx).await;
+        match res {
+            WaitForResult::Ok(status) => {
+                status
+                    .map(|_| ())
+                    .context("Failed to wait for worker status")?;
+            }
+            WaitForResult::Cancelled => {
+                self.kill_child().await?;
+            }
+            WaitForResult::HardTimeout => {
+                self.kill_child().await?;
+                bail!("Worker process timed out");
+            }
+        }
         Ok(())
+    }
+
+    // TODO: Timer arg? Might be useful for different times for different cases
+    // Also would want to raise the arg to wait_for_new_message so cases can take however long
+    // but internal messages should happen in like 2 seconds
+    async fn wait_for<T>(
+        future: impl Future<Output = T>,
+        mut shutdown_rx: ShutdownReceiver,
+    ) -> WaitForResult<T> {
+        select! {
+            res = future => WaitForResult::Ok(res),
+            _ = shutdown_rx.changed() => WaitForResult::Cancelled,
+            // TODO: See WaitForResult::HardTimeout
+        }
     }
 
     fn kill_sub_child(&mut self) -> Result {
@@ -277,7 +316,10 @@ impl Worker {
                 .await
                 .context("Couldn't kill worker process")?;
         }
-        self.wait_child().await?;
+        self.child
+            .wait()
+            .await
+            .context("Couldn't wait for worker process")?;
         Ok(())
     }
 
