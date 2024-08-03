@@ -652,7 +652,7 @@ pub const AARCH64_CALLS: [(&str, i32); 296] = [
     ("writev", 66),
 ];
 
-pub const BASE_ALLOWED_SYSCALLS: [&str; 98] = [
+pub const BASE_ALLOWED_SYSCALLS: [&str; 105] = [
     "sched_yield",
     "statx",
     "clock_nanosleep",
@@ -751,4 +751,11 @@ pub const BASE_ALLOWED_SYSCALLS: [&str; 98] = [
     "io_uring_enter",
     "epoll_pwait",
     "pkey_alloc",
+    "close_range",
+    "fchdir",
+    "kill",
+    "stat",
+    "rt_sigtimedwait",
+    "mkdirat",
+    "nanosleep",
 ];

@@ -1,6 +1,5 @@
 use std::{
     io::Write,
-    path::Path,
     process::{Command, Stdio},
 };
 
@@ -13,20 +12,21 @@ use super::{ServiceMessage, WorkerMessage};
 pub fn run_from_child() {
     WorkerLogger::setup();
     info!("Starting Worker...");
-    let cwd = std::env::current_dir().unwrap();
-    if let Err(e) = _run_from_child(&cwd) {
+    if let Err(e) = _run_from_child() {
         WorkerMessage::InternalError(format!("{e:?}"))
             .send()
             .unwrap();
     }
 }
 
-fn _run_from_child(dir: &Path) -> Result {
+fn _run_from_child() -> Result {
+    let dir = std::env::current_dir().context("Couldn't get current directory")?;
+
     let init = wait_for_msg!(ServiceMessage::InitialInfo(i) => i)?;
 
     info!("{}", init.diagnostic_info);
 
-    super::isolation::isolate(&init.isolation_config, dir).context("Couldn't isolate process")?;
+    super::isolation::isolate(&init.isolation_config, &dir).context("Couldn't isolate process")?;
 
     std::fs::write(&init.file_name, &init.program).context("Couldn't write program to file")?;
 
@@ -72,7 +72,7 @@ fn run_cmd(mut cmd: Command, stdin: Option<String>) -> Result {
     WorkerMessage::CmdComplete(output.into()).send()
 }
 
-struct WorkerLogger(String);
+pub struct WorkerLogger(String);
 
 impl WorkerLogger {
     fn new() -> Self {

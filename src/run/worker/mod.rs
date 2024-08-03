@@ -7,35 +7,19 @@ use super::config::CommandInfo;
 mod isolation;
 /// Service process side of the worker
 mod service_side;
+mod test_shell;
 /// Worker process side of the worker
 mod worker_side;
 
 pub use isolation::IsolationConfig;
 use nix::sys::signal::Signal;
 pub use service_side::Worker;
+pub use test_shell::run_test_shell;
 pub use worker_side::run_from_child;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DiagnosticInfo {
-    pub run_id: u64,
-    pub user_id: i64,
-    pub problem_id: i64,
-    pub lang: String,
-}
-
-impl Display for DiagnosticInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "ID: {}, User: {}, Problem: {}, Language: {}",
-            self.run_id, self.user_id, self.problem_id, self.lang
-        )
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitialWorkerInfo {
-    pub diagnostic_info: DiagnosticInfo,
+    pub diagnostic_info: String,
     pub isolation_config: isolation::IsolationConfig,
     pub program: String,
     pub file_name: String,

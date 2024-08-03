@@ -6,11 +6,7 @@ use std::{
 
 use chrono::NaiveDateTime;
 
-use crate::{
-    error::prelude::*,
-    problems::TestCase,
-    run::worker::{DiagnosticInfo, Worker},
-};
+use crate::{error::prelude::*, problems::TestCase, run::worker::Worker};
 
 use super::{
     config::LanguageRunnerInfo, manager::ShutdownReceiver, worker::CaseError,
@@ -239,6 +235,24 @@ impl JobContext {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticInfo {
+    pub run_id: u64,
+    pub user_id: i64,
+    pub problem_id: i64,
+    pub lang: String,
+}
+
+impl Display for DiagnosticInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ID: {}, User: {}, Problem: {}, Language: {}",
+            self.run_id, self.user_id, self.problem_id, self.lang
+        )
+    }
+}
+
 pub async fn run_job(
     request: &JobRequest,
     state_tx: JobStateSender,
@@ -289,11 +303,19 @@ async fn _run_job(
         user_id: request.user_id,
         problem_id: request.problem_id,
         lang: request.language_key.clone(),
-    };
+    }
+    .to_string();
 
-    let mut worker = Worker::new(request.id, request, shutdown_rx, language, isolation, diag)
-        .await
-        .context("Worker Creation Failed")?;
+    let mut worker = Worker::new(
+        request.id,
+        &request.program,
+        shutdown_rx,
+        language,
+        isolation,
+        &diag,
+    )
+    .await
+    .context("Worker Creation Failed")?;
 
     let res = run_worker(&mut worker, request, &mut ctx).await;
 

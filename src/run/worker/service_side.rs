@@ -19,7 +19,6 @@ use crate::{
     problems::TestCase,
     run::{
         config::{CommandInfo, LanguageRunnerInfo},
-        job::JobRequest,
         manager::ShutdownReceiver,
     },
 };
@@ -30,8 +29,7 @@ use super::{
         id_map::{map_uid_gid, MapInfo},
         IsolationConfig,
     },
-    CaseError, CaseResult, CmdResult, DiagnosticInfo, InitialWorkerInfo, ServiceMessage,
-    WorkerMessage,
+    CaseError, CaseResult, CmdResult, InitialWorkerInfo, ServiceMessage, WorkerMessage,
 };
 
 pub struct Worker {
@@ -84,11 +82,11 @@ impl Worker {
 
     pub async fn new(
         id: u64,
-        req: &JobRequest,
+        program: &str,
         shutdown_rx: ShutdownReceiver,
         run: LanguageRunnerInfo,
         iso: IsolationConfig,
-        diag: DiagnosticInfo,
+        diag: &str,
     ) -> Result<Self> {
         let mut env = iso.env.clone();
         env.extend(run.env.clone());
@@ -123,23 +121,23 @@ impl Worker {
             stdout: stdout_reader,
         };
 
-        worker.init(req, diag, iso, run, map_info).await?;
+        worker.init(program, diag, iso, run, map_info).await?;
 
         Ok(worker)
     }
 
     async fn init(
         &mut self,
-        req: &JobRequest,
-        diag: DiagnosticInfo,
+        program: &str,
+        diag: &str,
         iso: IsolationConfig,
         run: LanguageRunnerInfo,
         map_info: MapInfo,
     ) -> Result {
         let msg = ServiceMessage::InitialInfo(InitialWorkerInfo {
-            diagnostic_info: diag,
+            diagnostic_info: diag.to_string(),
             isolation_config: iso,
-            program: req.program.to_string(),
+            program: program.to_string(),
             file_name: run.file_name,
         });
 

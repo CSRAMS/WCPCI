@@ -16,7 +16,7 @@ pub struct CommandInfo {
     pub binary: String,
     /// Arguments to pass to the binary
     #[serde(default)]
-    args: Vec<String>,
+    pub args: Vec<String>,
 }
 
 impl CommandInfo {

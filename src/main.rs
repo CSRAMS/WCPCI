@@ -42,22 +42,6 @@ async fn md_help(user: Option<&User>) -> Template {
     Template::render("md_help", ctx)
 }
 
-fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
-
-    if args.contains(&"--worker".to_string()) {
-        run::worker::run_from_child();
-    } else {
-        _main().expect("Rocket failed to start");
-    }
-}
-
-#[rocket::main]
-async fn _main() -> Result<(), rocket::Error> {
-    rocket().ignite().await?.launch().await?;
-    Ok(())
-}
-
 fn rocket() -> rocket::Rocket<Build> {
     if cfg!(debug_assertions) {
         println!("Loading .dev.env...");
@@ -86,4 +70,23 @@ fn rocket() -> rocket::Rocket<Build> {
         .attach(problems::stage())
         .attach(leaderboard::stage())
         .attach(profile::stage())
+}
+
+#[rocket::main]
+async fn _main() -> Result<(), rocket::Error> {
+    rocket().ignite().await?.launch().await?;
+    Ok(())
+}
+
+fn main() {
+    let args = std::env::args().collect::<Vec<_>>();
+
+    if args.contains(&"--worker".to_string()) {
+        run::worker::run_from_child();
+    } else if args.contains(&"--worker-test-shell".to_string()) {
+        run::worker::run_test_shell().expect("Worker test shell failed");
+        println!("Worker test shell exited");
+    } else {
+        _main().expect("Rocket failed to start");
+    }
 }
