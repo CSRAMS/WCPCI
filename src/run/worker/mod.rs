@@ -128,6 +128,8 @@ pub enum WorkerMessage {
     Ready,
     /// Not technically from the worker, used signify when a wait for message was cancelled
     Cancelled,
+    /// Also not from the worker, used to signify when a wait for message timed out
+    TimedOut,
 }
 
 impl WorkerMessage {
@@ -172,7 +174,7 @@ pub type CaseResult<T = ()> = Result<T, CaseError>;
 #[serde(tag = "err", content = "data", rename_all = "camelCase")]
 pub enum CaseError {
     Logic,
-    //TimeLimitExceeded,
+    TimeLimitExceeded,
     Runtime(String),
     Compilation(String),
     Judge(String),
@@ -203,6 +205,7 @@ impl CaseError {
                     "Compilation Error".to_string()
                 }
             }
+            CaseError::TimeLimitExceeded => "Time Limit Exceeded".to_string(),
             CaseError::Judge(_) => "Judge Error".to_string(),
             CaseError::Cancelled => "Run Cancelled".to_string(),
         }

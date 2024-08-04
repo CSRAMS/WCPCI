@@ -34,7 +34,7 @@ pub fn isolate(config: &IsolationConfig, root: &Path) -> Result {
     unshare().context("Couldn't unshare")?;
     wait_for_id_mapping()?;
     su_root()?;
-    mount_root(root).context("Couldn't mount root")?;
+    mount_root(root, &config.limits.tmpfs_size).context("Couldn't mount root")?;
     setup_environment(root, &config.bind_mounts).context("Couldn't setup environment")?;
     chroot(root).context("Couldn't chroot to jail")?;
     setup_environment_post_chroot().context("Couldn't setup environment post chroot")?;

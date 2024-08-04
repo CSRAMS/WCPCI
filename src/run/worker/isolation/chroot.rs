@@ -5,6 +5,8 @@ use std::path::Path;
 use crate::error::prelude::*;
 
 pub fn chroot(new_root: &Path) -> Result {
+    debug!("Chrooting to {}", new_root.display());
+
     // cd and chroot to the new root directory
     std::env::set_current_dir(new_root).context("Couldn't set current directory to new root")?;
     nix::unistd::chroot(new_root).context("Couldn't chroot to new root")?;

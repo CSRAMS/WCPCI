@@ -68,15 +68,17 @@ fn mount_proc(root: &Path) -> Result {
 
 /// Mounts a tmpfs at the given path
 /// Used as our root
-pub fn mount_root(root: &Path) -> Result {
+pub fn mount_root(root: &Path, limit: &str) -> Result {
     debug!("Mounting root tmpfs at {}", root.display());
+
+    let data = format!("mode=0755,size={limit}");
 
     nix::mount::mount(
         None::<&str>,
         root,
         Some("tmpfs"),
         MsFlags::MS_NODEV | MsFlags::MS_NOSUID,
-        Some("mode=0755"),
+        Some(data.as_str()),
     )
     .context("Couldn't mount tmpfs")?;
 

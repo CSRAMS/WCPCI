@@ -42,13 +42,13 @@ pub struct Worker {
     stdin: ChildStdin,
     env: HashMap<String, String>,
     stdout: BufReader<ChildStdout>,
+    timeout_internal: Duration,
+    timeout_user: Duration,
 }
 
 enum WaitForResult<T> {
     Ok(T),
     Cancelled,
-    // TODO: Add hard timeout, runner config option?
-    #[allow(dead_code)]
     HardTimeout,
 }
 
@@ -109,6 +109,11 @@ impl Worker {
         let stdout = child.stdout.take().context("Couldn't take child stdout")?;
         let stdout_reader = BufReader::new(stdout);
 
+        let (timeout_internal, timeout_user) = (
+            Duration::from_secs(iso.limits.hard_timeout_internal_secs),
+            Duration::from_secs(iso.limits.hard_timeout_user_secs),
+        );
+
         let mut worker = Self {
             tmp_dir,
             compile_cmd: run.compile_cmd.clone(),
@@ -119,6 +124,8 @@ impl Worker {
             sub_child_pid: None,
             stdin,
             stdout: stdout_reader,
+            timeout_internal,
+            timeout_user,
         };
 
         worker.init(program, diag, iso, run, map_info).await?;
@@ -143,7 +150,7 @@ impl Worker {
 
         self.send_message(msg).await?;
 
-        let msg = self.wait_for_new_message().await?;
+        let msg = self.wait_for_new_message(None).await?;
 
         if let WorkerMessage::RequestUidGidMap(pid) = msg {
             self.sub_child_pid = Some(Pid::from_raw(pid));
@@ -154,7 +161,7 @@ impl Worker {
                 .await?;
             res.context("Couldn't map UID and GID")?;
 
-            let msg = self.wait_for_new_message().await?;
+            let msg = self.wait_for_new_message(None).await?;
 
             if let WorkerMessage::Ready = msg {
                 Ok(())
@@ -211,7 +218,7 @@ impl Worker {
         let msg = ServiceMessage::RunCmd(cmd.clone(), stdin, self.env.clone());
         self.send_message(msg).await?;
 
-        let msg = self.wait_for_new_message().await?;
+        let msg = self.wait_for_new_message(Some(self.timeout_user)).await?;
 
         match msg {
             WorkerMessage::CmdComplete(res) => match res {
@@ -222,6 +229,10 @@ impl Worker {
                 CmdResult::Failure(failure) => Err(CaseError::Runtime(failure.to_string())),
             },
             WorkerMessage::Cancelled => Err(CaseError::Cancelled),
+            WorkerMessage::TimedOut => {
+                self.kill_child().await?;
+                Err(CaseError::TimeLimitExceeded)
+            }
             _ => Err(anyhow!("Unexpected worker response: {:?}", msg).into()),
         }
     }
@@ -234,11 +245,13 @@ impl Worker {
             .context("Couldn't write message to worker")
     }
 
-    async fn wait_for_new_message(&mut self) -> Result<WorkerMessage> {
+    async fn wait_for_new_message(&mut self, timeout: Option<Duration>) -> Result<WorkerMessage> {
         let mut buf = String::new();
         let shutdown_rx = self.shutdown_rx.clone();
 
-        let res = Self::wait_for(self.stdout.read_line(&mut buf), shutdown_rx).await;
+        let timeout = timeout.unwrap_or(self.timeout_internal);
+
+        let res = Self::wait_for(self.stdout.read_line(&mut buf), shutdown_rx, timeout).await;
 
         match res {
             WaitForResult::Ok(res) => {
@@ -253,29 +266,21 @@ impl Worker {
                 }
             }
             WaitForResult::Cancelled => Ok(WorkerMessage::Cancelled),
-            // TODO: Should this be a user error? Penalty?
-            WaitForResult::HardTimeout => {
-                self.kill_child().await?;
-                bail!("Worker process timed out");
-            }
+            WaitForResult::HardTimeout => Ok(WorkerMessage::TimedOut),
         }
     }
 
     async fn wait_child(&mut self) -> Result {
         let shutdown_rx = self.shutdown_rx.clone();
-        let res = Self::wait_for(self.child.wait(), shutdown_rx).await;
+        let res = Self::wait_for(self.child.wait(), shutdown_rx, self.timeout_internal).await;
         match res {
             WaitForResult::Ok(status) => {
                 status
                     .map(|_| ())
                     .context("Failed to wait for worker status")?;
             }
-            WaitForResult::Cancelled => {
+            _ => {
                 self.kill_child().await?;
-            }
-            WaitForResult::HardTimeout => {
-                self.kill_child().await?;
-                bail!("Worker process timed out");
             }
         }
         Ok(())
@@ -287,11 +292,12 @@ impl Worker {
     async fn wait_for<T>(
         future: impl Future<Output = T>,
         mut shutdown_rx: ShutdownReceiver,
+        timeout: Duration,
     ) -> WaitForResult<T> {
         select! {
             res = future => WaitForResult::Ok(res),
             _ = shutdown_rx.changed() => WaitForResult::Cancelled,
-            // TODO: See WaitForResult::HardTimeout
+            _ = tokio::time::sleep(timeout), if timeout.as_secs() != 0 => WaitForResult::HardTimeout,
         }
     }
 

@@ -29,7 +29,15 @@ pub enum CaseStatus {
 impl CaseStatus {
     pub fn from_case_error(e: CaseError, details: bool) -> Self {
         let msg = e.to_string(details);
-        Self::Failed(matches!(e, CaseError::Logic | CaseError::Runtime(_)), msg)
+        // TODO: Make should_have_penalty a method on CaseError
+        // Right now this isn't very easy to find
+        Self::Failed(
+            matches!(
+                e,
+                CaseError::TimeLimitExceeded | CaseError::Logic | CaseError::Runtime(_)
+            ),
+            msg,
+        )
     }
 }
 

@@ -51,6 +51,11 @@ src = "/bin/sh"
 [[debug.run.isolation.bind_mounts]]
 src = "/usr/bin/env"
 
+[debug.run.isolation.limits]
+tmpfs_size = "3%"
+hard_timeout_internal_secs = 1
+hard_timeout_user_secs = 5
+
 [debug.run.isolation.seccomp]
 # mismatch_action = { action = "log" }
 

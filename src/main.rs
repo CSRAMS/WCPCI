@@ -78,15 +78,15 @@ async fn _main() -> Result<(), rocket::Error> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result {
     let args = std::env::args().collect::<Vec<_>>();
 
     if args.contains(&"--worker".to_string()) {
         run::worker::run_from_child();
+        Ok(())
     } else if args.contains(&"--worker-test-shell".to_string()) {
-        run::worker::run_test_shell().expect("Worker test shell failed");
-        println!("Worker test shell exited");
+        run::worker::run_test_shell().context("Worker test shell failed")
     } else {
-        _main().expect("Rocket failed to start");
+        _main().context("Rocket failed")
     }
 }
