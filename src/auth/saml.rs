@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use log::{info, warn};
+use openssl::pkey::PKey;
 use rocket::{
     fairing::AdHoc,
     form::Form,
@@ -13,6 +14,7 @@ use rocket::{
 use samael::{
     metadata::{ContactPerson, EntityDescriptor},
     service_provider::{ServiceProvider, ServiceProviderBuilder},
+    traits::ToXml,
 };
 use serde::Deserialize;
 
@@ -104,7 +106,8 @@ impl SamlOptions {
                 std::fs::read_to_string(private_key_path).context("Couldn't read private key")?;
             let key = openssl::rsa::Rsa::private_key_from_pem(private_key.as_bytes())
                 .context("Couldn't parse private key")?;
-            sp.key(key);
+            let key = PKey::from_rsa(key).context("Couldn't create PKey")?;
+            sp.key(Some(key));
         }
 
         let sp = sp.build().context("Couldn't build ServiceProvider")?;
@@ -142,10 +145,7 @@ async fn login(sp: &State<ServiceProvider>, cookies: &CookieJar<'_>) -> ResultRe
     //cookies.remove(Cookie::from(REDIRECT_COOKIE_NAME));
 
     let url = if let Some(key) = sp.key.as_ref() {
-        let key_der = key
-            .private_key_to_der()
-            .context("Couldn't Convert Private Key to DER")?;
-        req.signed_redirect(&relay, &key_der)
+        req.signed_redirect(&relay, key.clone())
     } else {
         req.redirect(&relay)
     }
@@ -163,7 +163,7 @@ async fn metadata(sp: &State<ServiceProvider>) -> ResultResponse<String> {
         .map_err(|e| anyhow!("{e:?}"))
         .context("Couldn't generate metadata")
         .and_then(|x| {
-            x.to_xml()
+            x.to_string()
                 .map_err(|e| anyhow!("{e:?}"))
                 .context("Couldn't convert metadata to XML")
         })?;

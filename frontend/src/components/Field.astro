@@ -58,7 +58,7 @@ const {
 
 const isCheckbox = type === "checkbox";
 
-const valueNoBraces = noTemplate ? "" : (value as string)?.replace?.(/{{\s|\s}}/g, "") ?? "";
+const valueNoBraces = noTemplate ? "" : ((value as string)?.replace?.(/{{\s|\s}}/g, "") ?? "");
 
 const errorVar = `${formObj}.errors | get(key='${fieldName}', default=[])`;
 

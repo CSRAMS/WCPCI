@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.82"
 chrono = { version = "0.4.35", default-features = false, features = ["serde", "std", "now"] }
-chrono-tz = { version = "0.8.6", features = ["serde"] }
+chrono-tz = { version = "0.9.0", features = ["serde"] }
 dotenvy = "0.15.7"
 flate2 = { version = "1.0.30" }
 log = "0.4.21"
@@ -17,22 +17,22 @@ nix = { version = "0.29.0", features = ["sched", "mount", "process", "user", "fs
 openssl = "0.10.64"
 rand = "0.8.5"
 regex = "1.10.3"
-reqwest = { version = "0.11.25", default-features = false, features = ["rustls-tls", "json"] }
-rocket = { version = "0.5.0", features = ["json", "tls"] }
-rocket_async_compression = "0.5.1"
-rocket_db_pools = { version = "0.1.0", features = ["sqlx_sqlite"] }
-rocket_dyn_templates = { version = "0.1.0", features = ["tera"] }
+reqwest = { version = "0.12.5", default-features = false, features = ["rustls-tls", "json"] }
+rocket = { version = "0.5.1", features = ["json", "tls"] }
+rocket_async_compression = "0.6.0"
+rocket_db_pools = { version = "0.2.0", features = ["sqlx_sqlite"] }
+rocket_dyn_templates = { version = "0.2.0", features = ["tera"] }
 rocket_oauth2 = "0.5.0"
 rocket_ws = "0.1.0"
 rustc_version_runtime = "0.3.0"
-samael = { version = "0.0.15", features = ["xmlsec"] }
+samael = { version = "0.0.17", features = ["xmlsec"] }
 seccompiler = { version = "0.4.0", features = ["json", "serde", "serde_json"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.114"
 sha1 = "0.10.6"
 sha256 = "1.5.0"
 slug = "0.1.5"
-sqlx = { version = "0.7.3", features = ["migrate", "chrono"] }
+sqlx = { version = "0.7.0", features = ["migrate", "chrono"] }
 tera = "1.19.1"
 tokio = { version = "1.36.0", features = ["process"] }
 tokio-util = "0.7.11"

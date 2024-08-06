@@ -1,4 +1,4 @@
-import "monaco-editor/esm/vs/editor/browser/widget/codeEditorWidget.js";
+import "monaco-editor/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget";
 import "monaco-editor/esm/vs/editor/contrib/anchorSelect/browser/anchorSelect.js";
 import "monaco-editor/esm/vs/editor/contrib/bracketMatching/browser/bracketMatching.js";
 import "monaco-editor/esm/vs/editor/contrib/caretOperations/browser/caretOperations.js";
@@ -13,7 +13,7 @@ import "monaco-editor/esm/vs/editor/contrib/documentSymbols/browser/documentSymb
 import "monaco-editor/esm/vs/editor/contrib/find/browser/findController.js";
 import "monaco-editor/esm/vs/editor/contrib/folding/browser/folding.js";
 import "monaco-editor/esm/vs/editor/contrib/fontZoom/browser/fontZoom.js";
-import "monaco-editor/esm/vs/editor/contrib/hover/browser/hover.js";
+import "monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution";
 import "monaco-editor/esm/vs/editor/contrib/inPlaceReplace/browser/inPlaceReplace.js";
 import "monaco-editor/esm/vs/editor/contrib/indentation/browser/indentation.js";
 // import 'monaco-editor/esm/vs/editor/contrib/inlineHints/browser/inlineHintsController.js';
