@@ -48,6 +48,16 @@ writers.writeTOML "rocket.toml" {
       max_program_length = 100000;
       default_language = "python";
 
+      isolation = {
+        workers_parent = "/tmp";
+        include_bins = ["${gcc}/bin/cc"];
+        bind_mounts = [
+          {src = "/nix/store";}
+          {src = "/bin/sh";}
+          {src = "/usr/bin/env";}
+        ];
+      };
+
       languages = {
         bash = {
           display = {
@@ -96,7 +106,6 @@ writers.writeTOML "rocket.toml" {
           };
           runner = {
             file_name = "main.rs";
-            include_bins = ["${gcc}/bin/cc"];
             compile_cmd = {
               binary = "${rustc}/bin/rustc";
               args = ["main.rs" "-o" "main"];
