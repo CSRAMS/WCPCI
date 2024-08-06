@@ -1,41 +1,58 @@
-use chrono::NaiveDateTime;
-use log::{error, info};
+use core::fmt;
+use std::{
+    fmt::{Display, Formatter},
+    time::Instant,
+};
 
-use crate::{problems::TestCase, run::runner::CaseError};
+use chrono::NaiveDateTime;
+use tokio_util::sync::CancellationToken;
+
+use crate::{error::prelude::*, problems::TestCase, run::worker::Worker};
 
 use super::{
-    languages::LanguageConfig, manager::ShutdownReceiver, runner::Runner, JobStateReceiver,
+    config::LanguageRunnerInfo,
+    worker::{CaseError, CaseResult, IsolationConfig},
     JobStateSender,
 };
 
-#[derive(Debug, Clone, Serialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(tag = "status", content = "content", rename_all = "camelCase")]
 pub enum CaseStatus {
     #[default]
     Pending,
     Running,
-    Passed(Option<String>),
+    // Passed, output
+    Passed(String),
     NotRun,
+    /// Penalty, Error
     Failed(bool, String),
 }
 
 impl CaseStatus {
-    pub fn to_name(&self) -> &str {
+    pub fn from_case_error(e: CaseError, details: bool) -> Self {
+        let msg = e.to_string(details);
+        Self::Failed(e.gives_penalty(), msg)
+    }
+}
+
+impl Display for CaseStatus {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::Pending => "Pending",
-            Self::Running => "Running",
-            Self::Passed(_) => "Passed",
-            Self::NotRun => "NotRun",
-            Self::Failed(_, _) => "Failed",
+            Self::Pending => write!(f, "[ ]"),
+            Self::Running => write!(f, "[⧗]"),
+            Self::Passed(_) => write!(f, "[🗸]"),
+            Self::NotRun => write!(f, "[/]"),
+            Self::Failed(_, _) => write!(f, "[𐄂]"),
         }
     }
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum JobState {
     Judging {
         cases: Vec<CaseStatus>,
+        idx: usize,
         complete: bool,
     },
     Testing {
@@ -47,6 +64,7 @@ impl JobState {
     pub fn new_judging(cases: usize) -> Self {
         Self::Judging {
             cases: vec![CaseStatus::Pending; cases],
+            idx: 0,
             complete: false,
         }
     }
@@ -55,6 +73,17 @@ impl JobState {
         Self::Testing {
             status: CaseStatus::Pending,
         }
+    }
+
+    pub fn new_for_op(op: &JobOperation) -> Self {
+        match op {
+            JobOperation::Judging(cases) => Self::new_judging(cases.len()),
+            JobOperation::Testing(_) => Self::new_testing(),
+        }
+    }
+
+    pub fn is_testing(&self) -> bool {
+        matches!(self, Self::Testing { .. })
     }
 
     pub fn last_error(&self) -> (usize, bool, Option<String>) {
@@ -100,7 +129,10 @@ impl JobState {
     pub fn start_first(&mut self) {
         match self {
             Self::Judging { cases, .. } => {
-                cases[0] = CaseStatus::Running;
+                // Shouldn't be empty, but to avoid a panic just in case
+                if let Some(c) = cases.get_mut(0) {
+                    *c = CaseStatus::Running;
+                }
             }
             Self::Testing { status } => {
                 *status = CaseStatus::Running;
@@ -108,21 +140,28 @@ impl JobState {
         }
     }
 
-    pub fn complete_case(&mut self, idx: usize, status: CaseStatus) {
+    pub fn complete_case(&mut self, status: CaseStatus) {
         match self {
-            Self::Judging { cases, complete } => {
-                if idx == cases.len() - 1 {
+            Self::Judging {
+                cases,
+                idx,
+                complete,
+            } => {
+                if *idx == cases.len() - 1 {
                     *complete = true;
                 } else if matches!(&status, CaseStatus::Failed(_, _)) {
                     cases
                         .iter_mut()
-                        .skip(idx + 1)
+                        .skip(*idx + 1)
                         .for_each(|c| *c = CaseStatus::NotRun);
                     *complete = true;
                 } else {
-                    cases[idx + 1] = CaseStatus::Running;
+                    cases[*idx + 1] = CaseStatus::Running;
                 }
-                cases[idx] = status;
+                cases[*idx] = status;
+                if !*complete {
+                    *idx += 1;
+                }
             }
             Self::Testing { status: my_status } => {
                 *my_status = status;
@@ -131,178 +170,181 @@ impl JobState {
     }
 }
 
+impl Display for JobState {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Judging { cases, .. } => {
+                for (i, c) in cases.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{}", c)?;
+                }
+                Ok(())
+            }
+            Self::Testing { status } => write!(f, "{}", status),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JobOperation {
     Judging(Vec<TestCase>),
     Testing(String),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobRequest {
+    pub id: u64,
     pub user_id: i64,
-    pub contest_id: i64,
     pub problem_id: i64,
+    pub contest_id: i64,
     pub program: String,
-    pub language: String,
-    pub cpu_time: i64,
+    pub language_key: String,
+    pub language: LanguageRunnerInfo,
+    pub soft_limits: (u64, u64),
     pub op: JobOperation,
 }
 
-pub struct Job {
-    pub id: u64,
-    user_id: i64,
-    runner: Runner,
-    op: JobOperation,
-    pub state: JobState,
-    state_tx: JobStateSender,
-    started_at: NaiveDateTime,
-    shutdown_rx: ShutdownReceiver,
+struct JobContext {
+    id: u64,
+    state: JobState,
+    sender: JobStateSender,
+    ins: Instant,
 }
 
-impl Job {
-    pub async fn new(
-        id: u64,
-        request: JobRequest,
-        shutdown_rx: ShutdownReceiver,
-        config: &LanguageConfig,
-    ) -> Result<(Self, JobStateReceiver), String> {
-        let mut state = match request.op {
-            JobOperation::Judging(ref cases) => JobState::new_judging(cases.len()),
-            JobOperation::Testing(_) => JobState::new_testing(),
-        };
+fn publish_state(sender: &JobStateSender, state: JobState) {
+    if let Err(why) = sender.send(state) {
+        error!("Couldn't send state update: {:?}", why);
+    }
+}
 
-        let res = Runner::new(
-            id,
-            &config.compile_cmd,
-            &config.run_cmd,
-            &config.file_name,
-            &request.program,
-            request.cpu_time,
-            shutdown_rx.clone(),
+impl JobContext {
+    fn new(req: &JobRequest, sender: JobStateSender) -> Self {
+        Self {
+            id: req.id,
+            ins: Instant::now(),
+            state: JobState::new_for_op(&req.op),
+            sender,
+        }
+    }
+
+    pub fn publish_state(&mut self) {
+        let elapsed = self.ins.elapsed();
+        info!("Job {} State: {} ({:?})", self.id, self.state, elapsed);
+        publish_state(&self.sender, self.state.clone());
+        self.ins = Instant::now();
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticInfo {
+    pub run_id: u64,
+    pub user_id: i64,
+    pub problem_id: i64,
+    pub lang: String,
+}
+
+impl Display for DiagnosticInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ID: {}, User: {}, Problem: {}, Language: {}",
+            self.run_id, self.user_id, self.problem_id, self.lang
         )
-        .await;
-        match res {
-            Ok(runner) => {
-                info!("Job {} Runner created", id);
-                let (state_tx, state_rx) = tokio::sync::watch::channel(state.clone());
-                Ok((
-                    Self {
-                        id,
-                        runner,
-                        state,
-                        state_tx,
-                        user_id: request.user_id,
-                        op: request.op,
-                        started_at: chrono::offset::Utc::now().naive_utc(),
-                        shutdown_rx,
-                    },
-                    state_rx,
-                ))
+    }
+}
+
+pub async fn run_job(
+    request: &JobRequest,
+    state_tx: JobStateSender,
+    shutdown: CancellationToken,
+    isolation: &IsolationConfig,
+) -> (JobState, NaiveDateTime) {
+    let started_at = chrono::offset::Utc::now().naive_utc();
+    let tx = state_tx.clone();
+    let rx = state_tx.subscribe();
+    let res = _run_job(
+        state_tx,
+        shutdown,
+        request,
+        request.language.clone(),
+        isolation.clone(),
+    )
+    .await;
+    match res {
+        Ok(state) => (state, started_at),
+        Err(e) => {
+            if let CaseError::Judge(ref e) = e {
+                error!("Job {} Judge Error: {}", request.id, e);
             }
-            Err(e) => {
-                state.complete_case(0, e.clone().into());
-                Err(format!("Job {} Couldn't create runner: {:?}", id, e))
-            }
+            let mut last_state = rx.borrow().clone();
+            let details = last_state.is_testing();
+            last_state.complete_case(CaseStatus::from_case_error(e, details));
+            info!("Job {} State: {}", request.id, last_state);
+            publish_state(&tx, last_state.clone());
+            (last_state, started_at)
         }
     }
+}
 
-    pub async fn run(mut self) -> (JobState, NaiveDateTime) {
-        self.state.start_first();
-        self.publish_state();
-        if let Err(why) = self.runner.compile().await {
-            info!("Job {} Compilation Failed", self.id);
-            if matches!(&self.state, JobState::Testing { .. }) {
-                match why {
-                    CaseError::Compilation(e) => {
-                        self.state.complete_case(
-                            0,
-                            CaseStatus::Failed(false, format!("Compile Error: {}", e)),
-                        );
-                    }
-                    _ => {
-                        self.state.complete_case(0, why.into());
-                    }
+async fn _run_job(
+    state_tx: JobStateSender,
+    shutdown: CancellationToken,
+    request: &JobRequest,
+    language: LanguageRunnerInfo,
+    isolation: IsolationConfig,
+) -> Result<JobState, CaseError> {
+    let mut ctx = JobContext::new(request, state_tx);
+
+    ctx.state.start_first();
+    ctx.publish_state();
+
+    let diag = DiagnosticInfo {
+        run_id: request.id,
+        user_id: request.user_id,
+        problem_id: request.problem_id,
+        lang: request.language_key.clone(),
+    }
+    .to_string();
+
+    let mut worker = Worker::new(
+        request.id,
+        &request.program,
+        shutdown,
+        language,
+        isolation,
+        &diag,
+        request.soft_limits,
+    )
+    .await
+    .context("Worker Creation Failed")?;
+
+    let res = run_worker(&mut worker, request, &mut ctx).await;
+
+    worker.finish().await?;
+
+    res.map(|_| ctx.state)
+}
+
+async fn run_worker(worker: &mut Worker, request: &JobRequest, ctx: &mut JobContext) -> CaseResult {
+    worker.compile().await?;
+    match &request.op {
+        JobOperation::Testing(stdin) => {
+            let output = worker.run_cmd(Some(stdin)).await?;
+            ctx.state.complete_case(CaseStatus::Passed(output));
+            ctx.publish_state();
+        }
+        JobOperation::Judging(cases) => {
+            for case in cases.iter() {
+                let output = worker.run_case(case).await?;
+                ctx.state.complete_case(CaseStatus::Passed(output));
+                ctx.publish_state();
+                if ctx.state.complete() {
+                    break;
                 }
-            } else {
-                self.state.complete_case(0, why.into());
             }
-            self.publish_state();
-            self.runner.cleanup().await;
-            return (self.state, self.started_at);
-        }
-        info!(
-            "Job {} Starting, requested by user {}",
-            self.id, self.user_id
-        );
-        match &self.op {
-            JobOperation::Judging(cases) => {
-                for (i, case) in cases.iter().enumerate() {
-                    info!("Job {} Running Case {}", self.id, i + 1);
-                    let status = match self.runner.run_case(case).await {
-                        Ok(_) => CaseStatus::Passed(None),
-                        Err(e) => match &e {
-                            CaseError::Judge(ref why) => {
-                                error!(
-                                    "Job {} Case {} had a judging error: {:?}",
-                                    self.id,
-                                    i + 1,
-                                    why
-                                );
-                                e.into()
-                            }
-                            _ => e.into(),
-                        },
-                    };
-                    info!(
-                        "Job {} Case {} finished with status {:?}",
-                        self.id,
-                        i + 1,
-                        status.to_name()
-                    );
-                    self.state.complete_case(i, status);
-                    self.publish_state();
-                    if self.state.complete() {
-                        break;
-                    }
-                    if self.shutdown_rx.has_changed().unwrap_or(false) {
-                        info!("Job {} Received Shutdown Signal, Cancelling", self.id);
-                        self.runner.cleanup().await;
-                        return (self.state, self.started_at);
-                    }
-                }
-            }
-            JobOperation::Testing(input) => {
-                info!("Job {} Running Test", self.id);
-                let status = match self.runner.run_cmd(input).await {
-                    Ok(out) => CaseStatus::Passed(Some(out)),
-                    Err(e) => match &e {
-                        CaseError::Judge(ref why) => {
-                            error!("Job {} Test had a judging error: {:?}", self.id, why);
-                            e.into()
-                        }
-                        CaseError::Runtime(ref msg) => {
-                            CaseStatus::Failed(true, format!("Runtime Error: {}", msg))
-                        }
-                        _ => e.into(),
-                    },
-                };
-                info!(
-                    "Job {} Test finished with status {:?}",
-                    self.id,
-                    status.to_name()
-                );
-                self.state.complete_case(0, status);
-                self.publish_state();
-            }
-        }
-
-        info!("Job {} Finished", self.id);
-        self.runner.cleanup().await;
-        (self.state, self.started_at)
-    }
-
-    pub fn publish_state(&self) {
-        let res = self.state_tx.send(self.state.clone());
-        if let Err(why) = res {
-            error!("Job {} Couldn't send job state: {:?}", self.id, why);
         }
     }
+    Ok(())
 }

@@ -8,6 +8,10 @@ setup:
     cargo sqlx database setup
     -cp -n nix-template/secrets/.env .dev.env
 
+# Build the frontend
+frontend:
+    cd frontend && npm run build
+
 # Start a development server
 dev:
     cd frontend && npm run build
@@ -16,6 +20,16 @@ dev:
 # Run the backend and recompile the frontend when the frontend changes
 dev-watch:
     mprocs "cargo run" "cd frontend && npm run watch"
+
+# Run the backend with systemd-run delegating cgroup control
+dev-sdrun:
+    cargo build
+    systemd-run --user --scope -p Delegate=yes ./target/debug/wcpc
+
+# Run a worker test shell with systemd-run delegating cgroup control
+dev-test-shell:
+    cargo build
+    systemd-run --user --scope -p Delegate=yes ./target/debug/wcpc --worker-test-shell
 
 # Format backend & frontend
 format:

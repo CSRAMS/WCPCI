@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS problem (
     name VARCHAR(100) NOT NULL,
     slug VARCHAR(100) NOT NULL,
     description TEXT NOT NULL,
-    cpu_time INTEGER NOT NULL,
+    cpu_time INTEGER NOT NULL CHECK (cpu_time >= 0),
+    memory_limit INTEGER NOT NULL CHECK (memory_limit >= 0),
     FOREIGN KEY (contest_id) REFERENCES contest(id) ON DELETE CASCADE
     UNIQUE (contest_id, slug)
 );

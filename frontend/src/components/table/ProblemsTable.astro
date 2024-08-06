@@ -39,7 +39,11 @@ const { overrideEmptyText, class: className } = Astro.props;
     ]}
     listName="problems"
     itemName="problem"
-    columns={[{ name: "name" }, { name: "cpu_time", label: "CPU Time (seconds)" }]}
+    columns={[
+        { name: "name" },
+        { name: "cpu_time", label: "CPU Time (seconds)" },
+        { name: "memory_limit", label: "Memory Limit (MiB)" }
+    ]}
     emptyText={overrideEmptyText ?? "No Problems Have Been Made Yet."}
 />
 <div class="flex flex-row gap-2">

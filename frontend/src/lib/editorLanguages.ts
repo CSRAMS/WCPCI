@@ -2,6 +2,7 @@ import "monaco-editor/esm/vs/language/typescript/monaco.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/clojure/clojure.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/coffee/coffee.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution.js";
+import "monaco-editor/esm/vs/basic-languages/shell/shell.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/csharp/csharp.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/dart/dart.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/fsharp/fsharp.contribution.js";

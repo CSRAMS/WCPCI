@@ -5,6 +5,7 @@ use chrono::NaiveDateTime;
 use log::error;
 use rocket_db_pools::Pool;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::contests::{Contest, Participant};
 use crate::db::{DbPool, DbPoolConnection};
@@ -12,14 +13,15 @@ use crate::error::prelude::*;
 use crate::leaderboard::LeaderboardManagerHandle;
 use crate::problems::{JudgeRun, ProblemCompletion};
 
-use super::job::{Job, JobRequest};
+use super::job::{run_job, JobOperation, JobRequest};
+use super::worker::IsolationConfig;
 
-use super::languages::RunConfig;
+use super::config::{LanguageRunnerInfo, RunConfig};
 use super::{JobState, JobStateReceiver};
 
 type UserId = i64;
 
-type RunHandle = Arc<Mutex<Option<(i64, JobStateReceiver, (ShutDownSender, ShutdownReceiver))>>>;
+type RunHandle = Arc<Mutex<Option<(i64, JobStateReceiver, CancellationToken)>>>;
 
 pub type JobStartedMessage = (UserId, i64, JobStateReceiver);
 pub type JobStartedReceiver = tokio::sync::broadcast::Receiver<JobStartedMessage>;
@@ -29,38 +31,67 @@ pub type ProblemUpdatedMessage = ();
 pub type ProblemUpdatedReceiver = tokio::sync::watch::Receiver<ProblemUpdatedMessage>;
 pub type ProblemUpdatedSender = tokio::sync::watch::Sender<ProblemUpdatedMessage>;
 
-pub type ShutdownReceiver = tokio::sync::watch::Receiver<bool>;
-pub type ShutDownSender = tokio::sync::watch::Sender<bool>;
-
 pub struct RunManager {
     config: RunConfig,
+    isolation_config: IsolationConfig,
+    language_runner_info: HashMap<String, LanguageRunnerInfo>,
     id_counter: u64,
     jobs: HashMap<UserId, RunHandle>,
     db_pool: DbPool,
     job_started_channel: (JobStartedSender, JobStartedReceiver),
     problem_updated_channels: HashMap<i64, ProblemUpdatedSender>,
     leaderboard_handle: LeaderboardManagerHandle,
-    shutdown_rx: ShutdownReceiver,
+    shutdown: CancellationToken,
+}
+
+pub struct ManagerJobRequest {
+    pub user_id: UserId,
+    pub problem_id: i64,
+    pub contest_id: i64,
+    pub program: String,
+    pub language_key: String,
+    pub soft_limits: (u64, u64),
+    pub op: JobOperation,
 }
 
 impl RunManager {
-    pub fn new(
+    pub async fn new(
         config: RunConfig,
         leaderboard_manager: LeaderboardManagerHandle,
         pool: DbPool,
-        shutdown_rx: ShutdownReceiver,
-    ) -> Self {
+        shutdown: CancellationToken,
+    ) -> Result<Self> {
         let (tx, rx) = tokio::sync::broadcast::channel(10);
-        Self {
+
+        let run_data = config
+            .languages
+            .iter()
+            .map(|(k, l)| {
+                let mut l = l.clone();
+                if let Some(compiled_cmd) = l.runner.compile_cmd.as_mut() {
+                    compiled_cmd.setup()?;
+                }
+                l.runner.run_cmd.setup()?;
+                Ok::<(String, LanguageRunnerInfo), anyhow::Error>((k.clone(), l.runner))
+            })
+            .collect::<Result<_, _>>()
+            .context("Failed to initialize language runner data")?;
+
+        let mut isolation_config = config.isolation.clone();
+        isolation_config.setup().await?;
+
+        Ok(Self {
             config,
+            isolation_config,
+            language_runner_info: run_data,
             id_counter: 1,
             leaderboard_handle: leaderboard_manager,
             jobs: HashMap::with_capacity(10),
             db_pool: pool,
             job_started_channel: (tx, rx),
             problem_updated_channels: HashMap::with_capacity(5),
-            shutdown_rx,
-        }
+            shutdown,
+        })
     }
 
     pub async fn all_active_jobs(&self) -> Vec<(UserId, i64)> {
@@ -78,23 +109,20 @@ impl RunManager {
         self.job_started_channel.0.subscribe()
     }
 
-    pub async fn subscribe_shutdown(&self, user_id: &UserId) -> ShutdownReceiver {
+    pub async fn subscribe_shutdown(&self, user_id: &UserId) -> CancellationToken {
         if let Some(handle) = self.jobs.get(user_id) {
             let handle = handle.lock().await;
-            if let Some((_, _, (_, rx))) = handle.as_ref() {
-                rx.clone()
+            if let Some((_, _, shutdown)) = handle.as_ref() {
+                shutdown.clone()
             } else {
-                self.shutdown_rx.clone()
+                self.shutdown.clone()
             }
         } else {
-            self.shutdown_rx.clone()
+            self.shutdown.clone()
         }
     }
 
     async fn start_job(&mut self, request: JobRequest) -> Result<(), String> {
-        let id = self.id_counter;
-        self.id_counter += 1;
-
         if request.program.len() > self.config.max_program_length {
             return Err(format!(
                 "Program too long, max length is {} bytes",
@@ -106,27 +134,16 @@ impl RunManager {
         let problem_id = request.problem_id;
         let contest_id = request.contest_id;
         let program = request.program.clone();
-        let language = request.language.clone();
 
-        let language_config = self
-            .config
-            .languages
-            .get(&request.language)
-            .ok_or_else(|| format!("Language {} not supported by runner", request.language))?;
+        let shutdown = CancellationToken::new();
+        let (state_tx, state_rx) = tokio::sync::watch::channel(JobState::new_for_op(&request.op));
 
-        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-
-        let (job, state_rx) = Job::new(id, request, shutdown_rx.clone(), language_config)
-            .await
-            .map_err(|e| {
-                error!("Couldn't create job: {:?}", e);
-                "Judge Error".to_string()
-            })?;
+        let shutdown_handle = shutdown.clone();
 
         let handle = Arc::new(Mutex::new(Some((
             problem_id,
             state_rx.clone(),
-            (shutdown_tx, shutdown_rx),
+            shutdown_handle,
         ))));
 
         self.jobs.insert(user_id, handle.clone());
@@ -135,17 +152,27 @@ impl RunManager {
 
         let leaderboard_handle = self.leaderboard_handle.clone();
 
+        let shutdown_job = shutdown.clone();
+
+        let isolation = self.isolation_config.clone();
+
         tokio::spawn(async move {
-            let (state, ran_at) = job.run().await;
-            handle.lock().await.take();
-            drop(handle);
+            let (state, ran_at) = run_job(&request, state_tx, shutdown_job, &isolation).await;
+
             if !matches!(state, JobState::Judging { .. }) {
+                handle.lock().await.take();
                 return;
             }
+
             match pool.get().await {
                 Ok(mut conn) => {
                     let run = JudgeRun::from_job_state(
-                        problem_id, user_id, program, language, &state, ran_at,
+                        problem_id,
+                        user_id,
+                        program,
+                        request.language_key.clone(),
+                        &state,
+                        ran_at,
                     );
                     if let Err(why) = Self::save_run(
                         &mut conn,
@@ -166,6 +193,7 @@ impl RunManager {
                     error!("Couldn't get db connection: {:?}", e);
                 }
             }
+            handle.lock().await.take();
         });
 
         self.job_started_channel
@@ -245,8 +273,8 @@ impl RunManager {
     pub async fn shutdown_job(&mut self, user_id: UserId) {
         if let Some(handle) = self.jobs.remove(&user_id) {
             let handle = handle.lock().await;
-            if let Some((_, _, (tx, _))) = handle.as_ref() {
-                tx.send(true).ok();
+            if let Some((_, _, shutdown)) = handle.as_ref() {
+                shutdown.cancel();
             }
         }
     }
@@ -254,8 +282,8 @@ impl RunManager {
     pub async fn shutdown(&mut self) {
         for (_, handle) in self.jobs.drain() {
             let handle = handle.lock().await;
-            if let Some((_, _, (tx, _))) = handle.as_ref() {
-                tx.send(true).ok();
+            if let Some((_, _, shutdown)) = handle.as_ref() {
+                shutdown.cancel();
             }
         }
     }
@@ -278,17 +306,42 @@ impl RunManager {
         }
     }
 
-    pub async fn request_job(&mut self, request: JobRequest) -> Result<(), String> {
+    fn create_job_request(&mut self, req: ManagerJobRequest) -> Result<JobRequest, String> {
+        let language_info = self
+            .language_runner_info
+            .get(&req.language_key)
+            .ok_or_else(|| format!("Language {} not found", req.language_key))?
+            .clone();
+
+        let id = self.id_counter;
+        self.id_counter += 1;
+
+        Ok(JobRequest {
+            id,
+            user_id: req.user_id,
+            problem_id: req.problem_id,
+            contest_id: req.contest_id,
+            program: req.program,
+            language_key: req.language_key,
+            language: language_info,
+            soft_limits: req.soft_limits,
+            op: req.op,
+        })
+    }
+
+    pub async fn request_job(&mut self, request: ManagerJobRequest) -> Result<(), String> {
         if let Some(handle) = self.jobs.get(&request.user_id) {
             let handle = handle.lock().await;
             if handle.is_some() {
                 Err("User already has a job running".to_string())
             } else {
                 drop(handle);
-                self.start_job(request).await
+                let req = self.create_job_request(request)?;
+                self.start_job(req).await
             }
         } else {
-            self.start_job(request).await
+            let req = self.create_job_request(request)?;
+            self.start_job(req).await
         }
     }
 }

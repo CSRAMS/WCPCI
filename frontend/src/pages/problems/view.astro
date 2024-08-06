@@ -147,6 +147,11 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
                         expression="problem.cpu_time | pluralize"
                     /></small
                 >
+                <small class="text-gray-500"
+                    >Memory Limit: <Variable expression="problem.memory_limit" /> MiB<Variable
+                        expression="problem.memory_limit | pluralize"
+                    /></small
+                >
                 <div class="h-96 overflow-y-auto pe-2 lg:h-full">
                     <div class="overflow-y-auto" id="rendered-md">
                         <Variable

@@ -18,7 +18,7 @@ use crate::{
     db::DbConnection,
     error::prelude::*,
     problems::{Problem, TestCase},
-    run::job::{JobOperation, JobRequest},
+    run::{job::JobOperation, manager::ManagerJobRequest},
 };
 
 use super::{JobState, JobStateReceiver, ManagerHandle};
@@ -26,7 +26,7 @@ use super::{JobState, JobStateReceiver, ManagerHandle};
 // Keep in sync with TypeScript type
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-enum WebSocketRequest {
+pub enum WebSocketRequest {
     Judge {
         program: String,
         language: String,
@@ -64,10 +64,11 @@ enum WebSocketMessage {
     Invalid { error: String },
 }
 
+#[allow(clippy::large_enum_variant)]
 enum LoopRes {
     Msg(WebSocketMessage),
     ChangeJobRx(JobStateReceiver),
-    JobStart(JobRequest),
+    JobStart(ManagerJobRequest),
     Pong(Vec<u8>),
     Ping,
     Break,
@@ -76,17 +77,18 @@ enum LoopRes {
 
 async fn websocket_loop(
     mut stream: DuplexStream,
-    manager: ManagerHandle,
+    manager_handle: ManagerHandle,
     problem: Problem,
     test_cases: Vec<TestCase>,
     user_id: i64,
 ) {
-    let mut _manager = manager.lock().await;
-    let mut started_rx = _manager.subscribe();
-    let mut shutdown_rx = _manager.subscribe_shutdown(&user_id).await;
-    let mut updated_rx = _manager.get_handle_for_problem(problem.id);
-    let state_rx = _manager.get_handle(user_id, problem.id).await;
-    drop(_manager);
+    let mut manager = manager_handle.lock().await;
+    let mut started_rx = manager.subscribe();
+    let shutdown = manager.subscribe_shutdown(&user_id).await;
+    let mut updated_rx = manager.get_handle_for_problem(problem.id);
+    let state_rx = manager.get_handle(user_id, problem.id).await;
+    drop(manager);
+
     // Fake receiver to start the loop, will be replaced by the real one
     let (_, fake_rx) = tokio::sync::watch::channel(JobState::new_judging(0));
 
@@ -137,13 +139,14 @@ async fn websocket_loop(
                                         WebSocketRequest::Judge { .. } => JobOperation::Judging(test_cases.clone()),
                                         WebSocketRequest::Test { input, .. } => JobOperation::Testing(input.to_string())
                                     };
-                                    let job_to_start = JobRequest {
+
+                                    let job_to_start = ManagerJobRequest {
                                         user_id,
                                         problem_id: problem.id,
                                         contest_id: problem.contest_id,
                                         program: request.program().to_string(),
-                                        language: request.language().to_string(),
-                                        cpu_time: problem.cpu_time,
+                                        language_key: request.language().to_string(),
+                                        soft_limits: (problem.cpu_time as u64, problem.memory_limit as u64), // `as` is safe due to DB constraint
                                         op
                                     };
                                     LoopRes::JobStart(job_to_start)
@@ -172,7 +175,7 @@ async fn websocket_loop(
                 let state = state_rx.borrow();
                 LoopRes::Msg(WebSocketMessage::StateUpdate { state: state.clone() })
             }
-            Ok(()) = shutdown_rx.changed() => {
+            _ = shutdown.cancelled() => {
                 LoopRes::Break
             }
             Ok(()) = updated_rx.changed() => {
@@ -192,9 +195,9 @@ async fn websocket_loop(
                     error!("Error sending message: {:?}", e);
                 }
             }
-            LoopRes::JobStart(job) => {
-                let mut manager = manager.lock().await;
-                let msg = match manager.request_job(job).await {
+            LoopRes::JobStart(req) => {
+                let mut manager = manager_handle.lock().await;
+                let msg = match manager.request_job(req).await {
                     Ok(_) => WebSocketMessage::RunStarted,
                     Err(why) => WebSocketMessage::RunDenied { reason: why },
                 };

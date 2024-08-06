@@ -19,6 +19,7 @@ template_dir = "frontend/dist"
 public_dir = "public"
 admins = [ "bwc9876@example.com" ]
 timezone = "America/New_York"
+# log_level = "debug"
 
 [debug.saml]
 entity_id = "urn:wcpc:saml-debugging"
@@ -36,7 +37,50 @@ email = "email"
 max_program_length = 100000
 default_language = "python"
 
-[debug.run.languages.python]
+[debug.run.isolation]
+workers_parent = "/tmp"
+include_bins = [ "cc" ]
+env = { GABAGOOL = "hello" }
+
+[[debug.run.isolation.bind_mounts]]
+src = "/nix/store"
+
+[[debug.run.isolation.bind_mounts]]
+src = "/bin/sh"
+
+[[debug.run.isolation.bind_mounts]]
+src = "/usr/bin/env"
+
+[debug.run.isolation.limits]
+tmpfs_size = "3%"
+hard_timeout_internal_secs = 1
+hard_timeout_user_secs = 5
+hard_cpu_limit_secs = 5
+hard_memory_limit_bytes = 500000000 # 500 MB
+max_fds = 20
+
+
+[debug.run.isolation.seccomp]
+# mismatch_action = { action = "log" }
+
+# -- Bash
+
+[debug.run.languages.bash.display]
+name = "Bash"
+default_code = """
+echo "Hello, World!"
+"""
+tabler_icon = "terminal"
+monaco_contribution = "shell"
+
+[debug.run.languages.bash.runner]
+file_name = "main.sh"
+run_cmd = { binary = "bash", args = [ "./main.sh" ] }
+
+
+# -- Python
+
+[debug.run.languages.python.display]
 name = "Python"
 default_code = """
 
@@ -45,11 +89,14 @@ print("Hello, World!")
 """
 tabler_icon = "brand-python"
 monaco_contribution = "python"
-file_name = "main.py"
-compile_cmd = ""
-run_cmd = "python main.py"
 
-[debug.run.languages.rust]
+[debug.run.languages.python.runner]
+file_name = "main.py"
+run_cmd = { binary = "python", args = [ "./main.py" ] }
+
+# -- Rust
+
+[debug.run.languages.rust.display]
 name = "Rust"
 default_code = """
 pub fn main() {
@@ -58,48 +105,66 @@ pub fn main() {
 """
 tabler_icon = "brand-rust"
 monaco_contribution = "rust"
-file_name = "main.rs"
-compile_cmd = "rustc main.rs -o main"
-run_cmd = "./main"
 
-[debug.run.languages.java]
+[debug.run.languages.rust.runner]
+file_name = "main.rs"
+include_bins = [ "cc" ]
+compile_cmd = { binary = "rustc", args = [ "main.rs", "-o", "main" ] }
+run_cmd = { binary = "./main" }
+
+# -- Java
+
+[debug.run.languages.java.display]
 name = "Java"
 default_code = """
 public class Man {
     public static void main(String[] args) {
-        System.out.println("Hello World!");
+        System.out.println("Hello, World!");
     }
 }
 """
 tabler_icon = "coffee"
 monaco_contribution = "java"
-file_name = "Man.java"
-compile_cmd = "javac Man.java"
-run_cmd = "java Man"
 
-[debug.run.languages.typescript]
+[debug.run.languages.java.runner]
+file_name = "Man.java"
+compile_cmd = { binary = "javac", args = [ "Man.java" ] }
+run_cmd = { binary = "java", args = [ "Man" ] }
+
+# -- TypeScript
+
+[debug.run.languages.typescript.display]
 name = "TypeScript / JavaScript"
 default_code = """
-console.log("Hello World!");
+console.log("Hello, World!");
 """
 tabler_icon = "brand-typescript"
 monaco_contribution = "typescript"
-file_name = "index.ts"
-compile_cmd = "tsc index.ts"
-run_cmd = "node index.js"
 
-[debug.run.languages.haskell]
+[debug.run.languages.typescript.runner]
+file_name = "index.ts"
+compile_cmd = { binary = "tsc", args = [ "index.ts" ] }
+run_cmd = { binary = "node", args = [ "index.js" ] }
+
+# -- Haskell
+
+[debug.run.languages.haskell.display]
 name = "Haskell"
 default_code = """
 main = putStrLn "Hello, World!"
 """
 tabler_icon = "lambda"
 monaco_contribution = "haskell"
-file_name = "main.hs"
-compile_cmd = "ghc main.hs"
-run_cmd = "./main"
 
-[debug.run.languages.csharp]
+[debug.run.languages.haskell.runner]
+file_name = "main.hs"
+include_bins = [ "cc" ]
+compile_cmd = { binary = "ghc", args = [ "main.hs" ] }
+run_cmd = { binary = "./main" }
+
+# -- C#
+
+[debug.run.languages.csharp.display]
 name = "C#"
 default_code = """
 public class Program
@@ -112,11 +177,15 @@ public class Program
 """
 tabler_icon = "brand-c-sharp"
 monaco_contribution = "csharp"
-file_name = "Program.cs"
-compile_cmd = "mcs Program.cs"
-run_cmd = "mono Program.exe"
 
-[debug.run.languages.c]
+[debug.run.languages.csharp.runner]
+file_name = "Program.cs"
+compile_cmd = { binary = "mcs", args = [ "Program.cs" ] }
+run_cmd = { binary = "mono", args = [ "Program.exe" ] }
+
+# -- C
+
+[debug.run.languages.c.display]
 name = "C"
 default_code = """
 #include <stdio.h>
@@ -128,11 +197,15 @@ int main() {
 """
 tabler_icon = "letter-c"
 monaco_contribution = "c"
-file_name = "main.c"
-compile_cmd = "gcc main.c -o main"
-run_cmd = "./main"
 
-[debug.run.languages.cpp]
+[debug.run.languages.c.runner]
+file_name = "main.c"
+compile_cmd = { binary = "gcc", args = [ "main.c", "-o", "main" ] }
+run_cmd = { binary = "./main" }
+
+# -- C++
+
+[debug.run.languages.cpp.display]
 name = "C++"
 default_code = """
 #include <iostream>
@@ -144,7 +217,10 @@ int main() {
 """
 tabler_icon = "brand-cpp"
 monaco_contribution = "cpp"
-file_name = "main.cpp"
-compile_cmd = "g++ main.cpp -o main"
-run_cmd = "./main"
 
+[debug.run.languages.cpp.runner]
+file_name = "main.cpp"
+compile_cmd = { binary = "g++", args = [ "main.cpp", "-o", "main" ] }
+run_cmd = { binary = "./main" }
+
+# TODO: Lua, Perl, Ruby, PHP, VB.NET, FSharp, Gleam
