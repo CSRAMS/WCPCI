@@ -8,6 +8,10 @@ setup:
     cargo sqlx database setup
     -cp -n nix-template/secrets/.env .dev.env
 
+# Build the frontend
+frontend:
+    cd frontend && npm run build
+
 # Start a development server
 dev:
     cd frontend && npm run build

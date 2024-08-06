@@ -146,8 +146,7 @@ async fn websocket_loop(
                                         contest_id: problem.contest_id,
                                         program: request.program().to_string(),
                                         language_key: request.language().to_string(),
-                                        // TODO: Memory should not be hardcoded, add memory usage option to problems
-                                        soft_limits: (problem.cpu_time as u64, 1024 * 1024 * 100), // `as` is safe due to DB constraint
+                                        soft_limits: (problem.cpu_time as u64, problem.memory_limit as u64), // `as` is safe due to DB constraint
                                         op
                                     };
                                     LoopRes::JobStart(job_to_start)

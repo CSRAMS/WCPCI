@@ -67,6 +67,7 @@ pub async fn problem_import_post(
                     name: &problem_data.name,
                     description: &problem_data.description,
                     cpu_time: problem_data.cpu_time,
+                    memory_limit: problem_data.memory_limit,
                     test_cases: problem_data
                         .cases
                         .iter()

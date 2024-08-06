@@ -31,6 +31,7 @@ struct ProblemData {
     name: String,
     description: String,
     cpu_time: i64,
+    memory_limit: i64,
     cases: Vec<CaseData>,
 }
 
@@ -43,6 +44,7 @@ impl ProblemData {
             name: problem.name.clone(),
             description: problem.description.clone(),
             cpu_time: problem.cpu_time,
+            memory_limit: problem.memory_limit,
             cases: cases.into_iter().map(CaseData::from).collect(),
         })
     }

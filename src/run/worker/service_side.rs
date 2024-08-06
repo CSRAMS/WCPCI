@@ -222,7 +222,7 @@ impl Worker {
 
     pub async fn run_cmd(&mut self, stdin: Option<&str>) -> CaseResult<String> {
         self.cgroup
-            .apply_soft_limits(self.soft_limits.0, self.soft_limits.1)
+            .apply_soft_limits(self.soft_limits.0, self.soft_limits.1 * 1024 * 1024)
             .await?;
         // Sleep for a bit of pizzaz
         tokio::time::sleep(Duration::from_millis(250)).await;
