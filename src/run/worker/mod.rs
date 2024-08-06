@@ -207,6 +207,7 @@ impl CaseError {
                 | CaseError::MemoryLimitExceeded(_)
                 | CaseError::Logic
                 | CaseError::Runtime(_)
+                | CaseError::HardTimeLimitExceeded
         )
     }
 
@@ -241,7 +242,7 @@ impl CaseError {
                 if details {
                     let seconds = time / 1_000_000;
                     let milliseconds = (time % 1_000_000) / 1000;
-                    format!("Time Limit Exceeded\nYour time: {seconds} s {milliseconds} ms")
+                    format!("Time Limit Exceeded\nYour time: {seconds}s {milliseconds}ms")
                 } else {
                     "Time Limit Exceeded".to_string()
                 }

@@ -223,3 +223,4 @@ file_name = "main.cpp"
 compile_cmd = { binary = "g++", args = [ "main.cpp", "-o", "main" ] }
 run_cmd = { binary = "./main" }
 
+# TODO: Lua, Perl, Ruby, PHP, VB.NET, FSharp, Gleam

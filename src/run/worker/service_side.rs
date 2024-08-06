@@ -318,10 +318,21 @@ impl Worker {
                         _ => Err(anyhow!("Unexpected worker response: {:?}", msg).into()),
                     }
                 }
+                // This branch cannot from the function with an error, as it would
+                // result in the worker future never having a shutdown signal sent
+                // meaning it could hang indefinitely
                 _ = tokio::time::sleep(Duration::from_millis(100)), if track_stats => {
-                    let diff = cgroup.get_stats().await? - base_stats;
-                    if let Err(e) = Self::check_stat_diff(diff, &cgroup, cpu_limit).await {
-                        break Err(e);
+                    let res = cgroup.get_stats().await;
+                    match res {
+                        Ok(stats) => {
+                            let diff = stats - base_stats;
+                            if let Err(e) = Self::check_stat_diff(diff, &cgroup, cpu_limit).await {
+                                break Err(e);
+                            }
+                        },
+                        Err(e) => {
+                            break Err(e.into());
+                        }
                     }
                 }
             }

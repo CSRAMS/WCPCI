@@ -198,7 +198,7 @@ impl IsolationConfig {
                     // TODO: Use rocket profile for this over debug_assertions
                     warn!("Couldn't setup cgroups: {:?}", why);
                     warn!("Because of debug mode, we will continue without cgroups");
-                    warn!("This WILL MAKE RUNNERS NON-FUNCTIONAL, run `just dev-drun` to start with systemd-delegated cgroups");
+                    warn!("This WILL MAKE RUNNERS NON-FUNCTIONAL, run `just dev-sdrun` to start with systemd-delegated cgroups");
                     warn!("In production this will be an error");
                 } else {
                     bail!("Couldn't setup cgroups: {}", why);

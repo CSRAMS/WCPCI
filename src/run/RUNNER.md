@@ -321,7 +321,7 @@ Now we need to first set our gid to `1`, set extra groups to `[1]`, and then our
 We're almost done, now we just need a little bit of hardening to further prevent tampering.
 
 First we set the `no_new_privs` flag, this will prevent us from gaining any new privileges. This cannot be undone
-and ensure that we can never gain new capabilities or priveleges (like setuid) when executing a new program. This is good
+and ensure that we can never gain new capabilities or privileges (like setuid) when executing a new program. This is good
 as it completely prevents `setuid` binaries from being run (`MSFLAGS_NOSUID` helps too).
 
 Then we set the `dumpable` flag to 0, this will prevent us from core dumping, making sure that no sensitive information
