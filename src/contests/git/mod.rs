@@ -140,7 +140,7 @@ pub async fn export_solutions(
                     .run_config
                     .languages
                     .get(&run.language)
-                    .and_then(|l| l.file_name.split('.').last())
+                    .and_then(|l| l.runner.file_name.split('.').last())
                     .unwrap_or("txt");
                 tree.add_entry(
                     BLOB_MODE.to_string(),
@@ -153,7 +153,7 @@ pub async fn export_solutions(
                     .run_config
                     .languages
                     .get(&run.language)
-                    .and_then(|l| l.file_name.split('.').last())
+                    .and_then(|l| l.runner.file_name.split('.').last())
                     .unwrap_or("txt");
                 tree.add_entry(
                     BLOB_MODE.to_string(),

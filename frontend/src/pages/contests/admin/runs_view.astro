@@ -9,6 +9,7 @@ import ProblemRun from "@/components/ProblemRun.astro";
 import { variable } from "@/lib/tera";
 import Button from "@/components/Button.astro";
 import Tile from "@/components/Tile.astro";
+import CopyButton from "@/components/CopyButton.astro";
 
 const displayName = variable(
     "target_user.display_name | default(value=target_user.default_display_name)"
@@ -48,12 +49,7 @@ const displayName = variable(
             <p>Language: <Variable expression="most_recent.language" /></p>
             <pre
                 class=`overflow-x-auto language-${variable("most_recent.language", "python")}`><code id=`run-${variable("most_recent.id", "1")}-code`>{variable("most_recent.program")}</code></pre>
-            <Button
-                class="copy-button w-fit"
-                color="secondary"
-                data-program={variable("most_recent.program | json_encode()")}
-                icon="tabler:clipboard">Copy to clipboard</Button
-            >
+            <CopyButton copyVar="most_recent.program" />
             <Else slot="else">
                 <p>No runs found.</p>
             </Else>
@@ -66,12 +62,7 @@ const displayName = variable(
             <p>Language: <Variable expression="success_recent.language" /></p>
             <pre
                 class=`overflow-x-auto language-${variable("success_recent.language", "python")}`><code id=`s-run-${variable("success_recent.id", "1")}-code`>{variable("success_recent.program")}</code></pre>
-            <Button
-                class="copy-button w-fit"
-                color="secondary"
-                data-program={variable("success_recent.program | json_encode()")}
-                icon="tabler:clipboard">Copy to clipboard</Button
-            >
+            <CopyButton copyVar="success_recent.program" />
             <Else slot="else">
                 <p>No successful runs found.</p>
             </Else>

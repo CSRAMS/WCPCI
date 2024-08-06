@@ -31,7 +31,7 @@ impl Commit {
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        let mut serialized = Vec::new();
+        let mut serialized = Vec::with_capacity(75);
         serialized.extend_from_slice(b"tree ");
         serialized.extend_from_slice(self.tree.as_bytes());
         serialized.push(b'\n');

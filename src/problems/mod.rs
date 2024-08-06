@@ -29,6 +29,7 @@ pub struct Problem {
     pub slug: String,
     pub description: String,
     pub cpu_time: i64,
+    pub memory_limit: i64,
 }
 
 impl Problem {
@@ -118,12 +119,13 @@ impl Problem {
     pub async fn insert(&self, db: &mut DbPoolConnection) -> Result<Problem> {
         sqlx::query_as!(
             Problem,
-            "INSERT INTO problem (name, contest_id, slug, description, cpu_time) VALUES (?, ?, ?, ?, ?) RETURNING *",
+            "INSERT INTO problem (name, contest_id, slug, description, cpu_time, memory_limit) VALUES (?, ?, ?, ?, ?, ?) RETURNING *",
             self.name,
             self.contest_id,
             self.slug,
             self.description,
-            self.cpu_time
+            self.cpu_time,
+            self.memory_limit
         )
         .fetch_one(&mut **db)
         .await.context("Failed to insert new problem")
@@ -132,12 +134,13 @@ impl Problem {
     pub async fn update(&self, db: &mut DbPoolConnection) -> Result {
         sqlx::query_as!(
             Problem,
-            "UPDATE problem SET name = ?, slug = ?, description = ?, cpu_time = ? WHERE id = ?",
+            "UPDATE problem SET name = ?, slug = ?, description = ?, cpu_time = ?, memory_limit = ? WHERE id = ?",
             self.name,
             self.slug,
             self.description,
             self.cpu_time,
-            self.id
+            self.memory_limit,
+            self.id,
         )
         .execute(&mut **db)
         .await
@@ -166,6 +169,7 @@ impl Problem {
             slug,
             description: form.description.to_string(),
             cpu_time: form.cpu_time,
+            memory_limit: form.memory_limit,
         }
     }
 }
@@ -177,6 +181,8 @@ pub struct ProblemForm<'r> {
     description: &'r str,
     #[field(validate = range(1..=100))]
     cpu_time: i64,
+    #[field(validate = range(1..))]
+    memory_limit: i64,
     test_cases: Vec<TestCaseForm<'r>>,
 }
 
@@ -192,6 +198,7 @@ impl<'r> TemplatedForm for ProblemFormTemplate<'r> {
                 ("name".to_string(), problem.name.clone()),
                 ("description".to_string(), problem.description.clone()),
                 ("cpu_time".to_string(), problem.cpu_time.to_string()),
+                ("memory_limit".to_string(), problem.memory_limit.to_string()),
             ]);
             for (i, case) in self.test_cases.iter().enumerate() {
                 map.insert(format!("test_cases[{}].stdin", i), case.stdin.to_string());
@@ -214,6 +221,7 @@ impl<'r> TemplatedForm for ProblemFormTemplate<'r> {
                 ("name".to_string(), "".to_string()),
                 ("description".to_string(), "".to_string()),
                 ("cpu_time".to_string(), "1".to_string()),
+                ("memory_limit".to_string(), "125".to_string()),
             ])
         }
     }

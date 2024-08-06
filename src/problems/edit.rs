@@ -83,6 +83,7 @@ pub async fn edit_problem_post(
             problem.slug = new_slug;
             problem.description = value.description.to_string();
             problem.cpu_time = value.cpu_time;
+            problem.memory_limit = value.memory_limit;
             problem.update(&mut db).await?;
             let test_cases = TestCase::from_vec(problem.id, &value.test_cases);
             TestCase::save_for_problem(&mut db, problem.id, test_cases).await?;

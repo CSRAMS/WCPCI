@@ -3,9 +3,9 @@ use sqlx::prelude::FromRow;
 
 use crate::{db::DbPoolConnection, error::prelude::*};
 
-#[derive(Serialize, FromRow, Clone, Debug)]
+#[derive(Serialize, Deserialize, FromRow, Clone, Debug)]
 pub struct TestCase {
-    id: i64,
+    pub id: i64,
     problem_id: i64,
     ord: i64,
     pub stdin: String,
@@ -103,7 +103,7 @@ impl TestCase {
         }
     }
 
-    pub fn check_output(&self, output: &str, expected: &str) -> Result<bool, String> {
+    pub fn check_output(&self, output: &str) -> Result<bool, String> {
         if self.use_regex {
             let mut builder = regex::RegexBuilder::new(&self.expected_pattern);
             builder.case_insensitive(self.case_insensitive);
@@ -112,7 +112,7 @@ impl TestCase {
                 .map_err(|e| format!("Couldn't build regex: {e:?}"))?;
             Ok(re.is_match(output.trim()))
         } else {
-            let (output, expected) = (output.trim(), expected.trim());
+            let (output, expected) = (output.trim(), self.expected_pattern.trim());
             if self.case_insensitive {
                 Ok(output.to_lowercase() == expected.to_lowercase())
             } else {

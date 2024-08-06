@@ -37,6 +37,8 @@ in
       gcc
       libiconv
       libtool
+      ghc
+      typescript
       libxml2
       libxslt
       llvmPackages.libclang

@@ -69,12 +69,12 @@ import Layout from "@/layouts/Layout.astro";
                 isMap
                 columns={[
                     { name: "lang_key", label: "id", forceNoPrefix: true },
-                    { name: "name" },
-                    { name: "tablerIcon" },
-                    { name: "monacoContribution" },
-                    { name: "fileName" },
-                    { name: "compile_cmd" },
-                    { name: "run_cmd" }
+                    { name: "display.name" },
+                    { name: "display.tablerIcon" },
+                    { name: "display.monacoContribution" },
+                    { name: "runner.fileName" },
+                    { name: 'runner.compile_cmd.binary | default(value="None")' },
+                    { name: "runner.run_cmd.binary" }
                 ]}
             />
             <h3 class="text-xl font-bold">SAML Info</h3>
