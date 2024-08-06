@@ -48,10 +48,9 @@ impl CGroup {
     }
 
     pub async fn get_current() -> Result<Self> {
-        // TODO: Make a config option? non-systemd systems might be weird
-        // can check mountinfo for cgroup2 fs
         const CGROUP_ROOT: &str = "/sys/fs/cgroup";
         const PROC_SELF_CGROUP: &str = "/proc/self/cgroup";
+
         let grp_info = tokio::fs::read_to_string(PROC_SELF_CGROUP)
             .await
             .context("Couldn't read cgroup info")?;

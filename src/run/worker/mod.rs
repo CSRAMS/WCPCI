@@ -143,10 +143,7 @@ impl WorkerMessage {
     }
 
     pub fn is_internal(&self) -> bool {
-        matches!(
-            self,
-            Self::Cancelled | Self::TimedOut | Self::InternalError(_)
-        )
+        matches!(self, Self::Cancelled | Self::TimedOut | Self::CaseError(_))
     }
 }
 

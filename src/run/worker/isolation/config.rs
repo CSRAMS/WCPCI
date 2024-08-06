@@ -30,10 +30,6 @@ const fn default_hard_timeout_user() -> u64 {
     30
 }
 
-const fn default_hard_cpu_limit() -> u64 {
-    60
-}
-
 const fn default_hard_memory_limit() -> u64 {
     1024 * 1024 * 350 // 350 MB
 }
@@ -81,12 +77,6 @@ pub struct LimitConfig {
     /// Set to 0 to not enforce a timeout, be warned this can lead to users running
     /// code potentially forever.
     pub hard_timeout_user_secs: u64,
-    #[serde(default = "default_hard_cpu_limit")]
-    /// Hard cap on the amount of CPU time the user's code can use
-    /// Soft limits set by problem settings won't kill the process, but this will
-    /// as a hard limit. This should be set above anything you plan to set as a soft limit
-    /// Default: 60 seconds
-    pub hard_cpu_limit_secs: u64, // TODO: Redo this to be related to share etc
     #[serde(default = "default_hard_memory_limit")]
     /// Hard cap on the amount of memory the user's code can use in bytes
     /// Soft limits set by problem settings won't kill the process, but this will
@@ -114,7 +104,6 @@ impl Default for LimitConfig {
             tmpfs_size: default_tmpfs_size(),
             hard_timeout_internal_secs: default_hard_timeout_internal(),
             hard_timeout_user_secs: default_hard_timeout_user(),
-            hard_cpu_limit_secs: default_hard_cpu_limit(),
             hard_memory_limit_bytes: default_hard_memory_limit(),
             pid_limit: default_pid_limit(),
             nice: default_nice(),

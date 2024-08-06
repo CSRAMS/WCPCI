@@ -318,7 +318,7 @@ impl Worker {
                         _ => Err(anyhow!("Unexpected worker response: {:?}", msg).into()),
                     }
                 }
-                // This branch cannot from the function with an error, as it would
+                // This branch cannot return from the function with an error, as it would
                 // result in the worker future never having a shutdown signal sent
                 // meaning it could hang indefinitely
                 _ = tokio::time::sleep(Duration::from_millis(100)), if track_stats => {
