@@ -11,6 +11,7 @@ use user::{su_root, su_runner};
 
 use crate::error::prelude::*;
 
+mod cgroup;
 mod chroot;
 mod config;
 mod environment;
@@ -22,6 +23,7 @@ mod syscalls;
 mod unshare;
 mod user;
 
+pub use cgroup::{CGroup, CGroupStats};
 pub use config::*;
 
 const RUNNER_UID: Uid = Uid::from_raw(1000);
@@ -39,10 +41,6 @@ pub fn isolate(config: &IsolationConfig, root: &Path) -> Result {
     chroot(root).context("Couldn't chroot to jail")?;
     setup_environment_post_chroot().context("Couldn't setup environment post chroot")?;
     su_runner()?;
-    // TODO: Limits?
-    // - Memory
-    // - CPU
-    // - Disk (tmpfs so still effectively memory, tmpfs mount has a size limit)
     harden_process().context("Couldn't harden process")?;
     let program = config
         .compiled_seccomp_program

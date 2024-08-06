@@ -17,6 +17,16 @@ dev:
 dev-watch:
     mprocs "cargo run" "cd frontend && npm run watch"
 
+# Run the backend with systemd-run delegating cgroup control
+dev-sdrun:
+    cargo build
+    systemd-run --user --scope -p Delegate=yes ./target/debug/wcpc
+
+# Run a worker test shell with systemd-run delegating cgroup control
+dev-test-shell:
+    cargo build
+    systemd-run --user --scope -p Delegate=yes ./target/debug/wcpc --worker-test-shell
+
 # Format backend & frontend
 format:
     cargo fmt

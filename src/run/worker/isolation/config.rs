@@ -4,7 +4,11 @@ use anyhow::bail;
 
 use crate::{error::prelude::*, run::where_is};
 
-use super::seccomp::{BpfConfig, SockFilter};
+use super::{
+    cgroup,
+    seccomp::{BpfConfig, SockFilter},
+    CGroup,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
@@ -24,6 +28,22 @@ const fn default_hard_timeout_internal() -> u64 {
 
 const fn default_hard_timeout_user() -> u64 {
     30
+}
+
+const fn default_hard_cpu_limit() -> u64 {
+    60
+}
+
+const fn default_hard_memory_limit() -> u64 {
+    1024 * 1024 * 350 // 350 MB
+}
+
+const fn default_pid_limit() -> u64 {
+    100
+}
+
+const fn default_nice() -> i32 {
+    10
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +81,31 @@ pub struct LimitConfig {
     /// Set to 0 to not enforce a timeout, be warned this can lead to users running
     /// code potentially forever.
     pub hard_timeout_user_secs: u64,
+    #[serde(default = "default_hard_cpu_limit")]
+    /// Hard cap on the amount of CPU time the user's code can use
+    /// Soft limits set by problem settings won't kill the process, but this will
+    /// as a hard limit. This should be set above anything you plan to set as a soft limit
+    /// Default: 60 seconds
+    pub hard_cpu_limit_secs: u64, // TODO: Redo this to be related to share etc
+    #[serde(default = "default_hard_memory_limit")]
+    /// Hard cap on the amount of memory the user's code can use in bytes
+    /// Soft limits set by problem settings won't kill the process, but this will
+    /// as a hard limit. This should be set above anything you plan to set as a soft limit
+    /// Default: 350 MB
+    pub hard_memory_limit_bytes: u64,
+    #[serde(default = "default_pid_limit")]
+    /// Cap on the number for PIDs that may be allocated by the user's code
+    /// Keep in mind each test case will spawn a new process, so it's a good
+    /// idea to set this to a fairly high amount
+    /// Default: 100
+    pub pid_limit: u64,
+    #[serde(default = "default_nice")]
+    /// The niceness delegated to the worker process
+    /// This is a value between -20 and 19, with 19 being the lowest priority
+    /// and -20 being the highest priority. This will determine CPU time allocation
+    /// for the worker process.
+    /// Default: 10
+    pub nice: i32,
 }
 
 impl Default for LimitConfig {
@@ -69,6 +114,10 @@ impl Default for LimitConfig {
             tmpfs_size: default_tmpfs_size(),
             hard_timeout_internal_secs: default_hard_timeout_internal(),
             hard_timeout_user_secs: default_hard_timeout_user(),
+            hard_cpu_limit_secs: default_hard_cpu_limit(),
+            hard_memory_limit_bytes: default_hard_memory_limit(),
+            pid_limit: default_pid_limit(),
+            nice: default_nice(),
         }
     }
 }
@@ -92,6 +141,8 @@ pub struct IsolationConfig {
     pub compiled_seccomp_program: Option<Vec<SockFilter>>,
     #[serde(default)]
     pub limits: LimitConfig,
+    #[serde(skip)]
+    pub cgroups: Option<(CGroup, CGroup)>,
 }
 
 impl IsolationConfig {
@@ -131,7 +182,29 @@ impl IsolationConfig {
         Ok(())
     }
 
-    pub fn setup(&mut self) -> Result {
+    pub async fn setup(&mut self) -> Result {
+        if self.limits.nice < -20 || self.limits.nice > 19 {
+            bail!(
+                "Invalid nice value: {}, should be in range [-20, 19]",
+                self.limits.nice
+            );
+        }
+        match cgroup::setup_cgroups().await {
+            Ok(cgroups) => {
+                self.cgroups = Some(cgroups);
+            }
+            Err(why) => {
+                if cfg!(debug_assertions) {
+                    // TODO: Use rocket profile for this over debug_assertions
+                    warn!("Couldn't setup cgroups: {:?}", why);
+                    warn!("Because of debug mode, we will continue without cgroups");
+                    warn!("This WILL MAKE RUNNERS NON-FUNCTIONAL, run `just dev-drun` to start with systemd-delegated cgroups");
+                    warn!("In production this will be an error");
+                } else {
+                    bail!("Couldn't setup cgroups: {}", why);
+                }
+            }
+        }
         self.verify_tmpfs_limit()?;
         self.add_bins_to_path()
             .context("Couldn't resolve binaries")?;

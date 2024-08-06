@@ -60,15 +60,18 @@ fn _run_from_child() -> Result {
 
 fn run_cmd(mut cmd: Command, stdin: Option<String>) -> Result {
     let mut child = cmd.spawn().context("Couldn't spawn process")?;
+
     if let Some(stdin_s) = stdin {
         let stdin = child.stdin.as_mut().context("Couldn't open stdin")?;
         stdin
             .write_all(stdin_s.as_bytes())
             .context("Couldn't write to stdin")?;
     }
+
     let output = child
         .wait_with_output()
         .context("Couldn't wait for process")?;
+
     WorkerMessage::CmdComplete(output.into()).send()
 }
 

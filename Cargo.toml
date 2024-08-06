@@ -35,6 +35,7 @@ slug = "0.1.5"
 sqlx = { version = "0.7.3", features = ["migrate", "chrono"] }
 tera = "1.19.1"
 tokio = { version = "1.36.0", features = ["process"] }
+tokio-util = "0.7.11"
 urlencoding = "2.1.3"
 
 [profile.release]

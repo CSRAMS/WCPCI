@@ -4,6 +4,7 @@ use log::{error, warn};
 use rocket::{fairing::AdHoc, routes};
 use rocket_db_pools::Database as R_Database;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::{db::Database, leaderboard::LeaderboardManagerHandle};
 
@@ -46,7 +47,8 @@ fn where_is(program: &str) -> Option<PathBuf> {
 }
 
 pub fn stage() -> AdHoc {
-    let (tx, rx) = tokio::sync::watch::channel(false);
+    let shutdown = CancellationToken::new();
+    let shutdown_rocket = shutdown.clone();
 
     AdHoc::try_on_ignite("Runner App", |rocket| async {
         let pool = match Database::fetch(&rocket) {
@@ -56,7 +58,7 @@ pub fn stage() -> AdHoc {
 
         let shutdown_fairing = AdHoc::on_shutdown("Shutdown Runners / Sockets", |rocket| {
             Box::pin(async move {
-                tx.send(true).ok();
+                shutdown_rocket.cancel();
                 if let Some(manager) = rocket.state::<ManagerHandle>() {
                     manager.lock().await.shutdown().await;
                 }
@@ -92,7 +94,8 @@ pub fn stage() -> AdHoc {
                 let leaderboard_manager =
                     rocket.state::<LeaderboardManagerHandle>().unwrap().clone();
                 let manager =
-                    manager::RunManager::new(config.clone(), leaderboard_manager, pool, rx);
+                    manager::RunManager::new(config.clone(), leaderboard_manager, pool, shutdown)
+                        .await;
                 match manager {
                     Ok(manager) => Ok(rocket
                         .attach(shutdown_fairing)

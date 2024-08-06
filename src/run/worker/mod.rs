@@ -26,6 +26,7 @@ pub struct InitialWorkerInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 /// Message from the service process to the worker process.
 pub enum ServiceMessage {
     /// Gives initial information to the worker process.
@@ -126,10 +127,12 @@ pub enum WorkerMessage {
     InternalError(String),
     /// Service process is ready to receive commands.
     Ready,
-    /// Not technically from the worker, used signify when a wait for message was cancelled
+    /// Internal, used signify when a wait for message was cancelled
     Cancelled,
-    /// Also not from the worker, used to signify when a wait for message timed out
+    /// Internal, used to signify when a wait for message timed out
     TimedOut,
+    /// Internal, used to signify when a limit was exceeded
+    CaseError(CaseError),
 }
 
 impl WorkerMessage {
@@ -137,6 +140,13 @@ impl WorkerMessage {
         let msg = serde_json::to_string(self).context("Couldn't serialize message")?;
         println!("{}", msg);
         Ok(())
+    }
+
+    pub fn is_internal(&self) -> bool {
+        matches!(
+            self,
+            Self::Cancelled | Self::TimedOut | Self::InternalError(_)
+        )
     }
 }
 
@@ -174,11 +184,13 @@ pub type CaseResult<T = ()> = Result<T, CaseError>;
 #[serde(tag = "err", content = "data", rename_all = "camelCase")]
 pub enum CaseError {
     Logic,
-    TimeLimitExceeded,
+    Cancelled,
+    HardTimeLimitExceeded,
+    CpuTimeExceeded(u64),
+    MemoryLimitExceeded(u64),
     Runtime(String),
     Compilation(String),
     Judge(String),
-    Cancelled,
 }
 
 impl From<anyhow::Error> for CaseError {
@@ -188,6 +200,26 @@ impl From<anyhow::Error> for CaseError {
 }
 
 impl CaseError {
+    pub fn gives_penalty(&self) -> bool {
+        matches!(
+            self,
+            CaseError::CpuTimeExceeded(_)
+                | CaseError::MemoryLimitExceeded(_)
+                | CaseError::Logic
+                | CaseError::Runtime(_)
+        )
+    }
+
+    pub fn should_kill_worker(&self) -> bool {
+        matches!(
+            self,
+            CaseError::HardTimeLimitExceeded
+                | CaseError::CpuTimeExceeded(_)
+                | CaseError::MemoryLimitExceeded(_)
+                | CaseError::Judge(_)
+        )
+    }
+
     pub fn to_string(&self, details: bool) -> String {
         match self {
             CaseError::Logic => "Logic Error".to_string(),
@@ -205,7 +237,24 @@ impl CaseError {
                     "Compilation Error".to_string()
                 }
             }
-            CaseError::TimeLimitExceeded => "Time Limit Exceeded".to_string(),
+            CaseError::CpuTimeExceeded(time) => {
+                if details {
+                    let seconds = time / 1_000_000;
+                    let milliseconds = (time % 1_000_000) / 1000;
+                    format!("Time Limit Exceeded\nYour time: {seconds} s {milliseconds} ms")
+                } else {
+                    "Time Limit Exceeded".to_string()
+                }
+            }
+            CaseError::MemoryLimitExceeded(used) => {
+                if details {
+                    let mega = used / (1024 * 1024);
+                    format!("Memory Limit Exceeded\nYour memory usage: {mega} MiB")
+                } else {
+                    "Memory Limit Exceeded".to_string()
+                }
+            }
+            CaseError::HardTimeLimitExceeded => "Hard Time Limit Exceeded".to_string(),
             CaseError::Judge(_) => "Judge Error".to_string(),
             CaseError::Cancelled => "Run Cancelled".to_string(),
         }

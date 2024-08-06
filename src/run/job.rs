@@ -5,12 +5,14 @@ use std::{
 };
 
 use chrono::NaiveDateTime;
+use tokio_util::sync::CancellationToken;
 
 use crate::{error::prelude::*, problems::TestCase, run::worker::Worker};
 
 use super::{
-    config::LanguageRunnerInfo, manager::ShutdownReceiver, worker::CaseError,
-    worker::IsolationConfig, JobStateSender,
+    config::LanguageRunnerInfo,
+    worker::{CaseError, CaseResult, IsolationConfig},
+    JobStateSender,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -29,15 +31,7 @@ pub enum CaseStatus {
 impl CaseStatus {
     pub fn from_case_error(e: CaseError, details: bool) -> Self {
         let msg = e.to_string(details);
-        // TODO: Make should_have_penalty a method on CaseError
-        // Right now this isn't very easy to find
-        Self::Failed(
-            matches!(
-                e,
-                CaseError::TimeLimitExceeded | CaseError::Logic | CaseError::Runtime(_)
-            ),
-            msg,
-        )
+        Self::Failed(e.gives_penalty(), msg)
     }
 }
 
@@ -208,7 +202,7 @@ pub struct JobRequest {
     pub program: String,
     pub language_key: String,
     pub language: LanguageRunnerInfo,
-    pub cpu_time: i64,
+    pub soft_limits: (u64, u64),
     pub op: JobOperation,
 }
 
@@ -264,7 +258,7 @@ impl Display for DiagnosticInfo {
 pub async fn run_job(
     request: &JobRequest,
     state_tx: JobStateSender,
-    shutdown_rx: ShutdownReceiver,
+    shutdown: CancellationToken,
     isolation: &IsolationConfig,
 ) -> (JobState, NaiveDateTime) {
     let started_at = chrono::offset::Utc::now().naive_utc();
@@ -272,7 +266,7 @@ pub async fn run_job(
     let rx = state_tx.subscribe();
     let res = _run_job(
         state_tx,
-        shutdown_rx,
+        shutdown,
         request,
         request.language.clone(),
         isolation.clone(),
@@ -296,7 +290,7 @@ pub async fn run_job(
 
 async fn _run_job(
     state_tx: JobStateSender,
-    shutdown_rx: ShutdownReceiver,
+    shutdown: CancellationToken,
     request: &JobRequest,
     language: LanguageRunnerInfo,
     isolation: IsolationConfig,
@@ -317,10 +311,11 @@ async fn _run_job(
     let mut worker = Worker::new(
         request.id,
         &request.program,
-        shutdown_rx,
+        shutdown,
         language,
         isolation,
         &diag,
+        request.soft_limits,
     )
     .await
     .context("Worker Creation Failed")?;
@@ -332,11 +327,7 @@ async fn _run_job(
     res.map(|_| ctx.state)
 }
 
-async fn run_worker(
-    worker: &mut Worker,
-    request: &JobRequest,
-    ctx: &mut JobContext,
-) -> Result<(), CaseError> {
+async fn run_worker(worker: &mut Worker, request: &JobRequest, ctx: &mut JobContext) -> CaseResult {
     worker.compile().await?;
     match &request.op {
         JobOperation::Testing(stdin) => {

@@ -5,8 +5,12 @@ use crate::{db::DbPoolConnection, error::prelude::*};
 
 pub struct Session {
     pub id: i64,
+    // For some reason these are marked as unused? sqlx stuff i guess
+    #[allow(dead_code)]
     pub user_id: i64,
+    #[allow(dead_code)]
     pub token: String,
+    #[allow(dead_code)]
     pub created_at: NaiveDateTime,
     pub expires_at: NaiveDateTime,
 }

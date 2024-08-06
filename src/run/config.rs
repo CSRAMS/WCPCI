@@ -97,7 +97,6 @@ pub struct RunConfig {
     pub default_language: String,
     #[serde(default)]
     pub isolation: IsolationConfig,
-    // TODO: Make network configurable
 }
 
 impl RunConfig {

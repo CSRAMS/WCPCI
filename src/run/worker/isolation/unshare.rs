@@ -26,7 +26,7 @@ fn fork_to_child() -> Result {
         let res = nix::unistd::fork().context("Couldn't fork PID 1 in new PID namespace")?;
 
         if let ForkResult::Parent { child } = res {
-            debug!("(Parent) Fork complete, sending child PID to service process");
+            debug!("(Parent) Fork complete, sending child PID ({child}) to service process");
             let res = WorkerMessage::RequestUidGidMap(child.as_raw())
                 .send()
                 .context("Couldn't send child PID to service process");

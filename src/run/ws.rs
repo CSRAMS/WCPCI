@@ -84,7 +84,7 @@ async fn websocket_loop(
 ) {
     let mut manager = manager_handle.lock().await;
     let mut started_rx = manager.subscribe();
-    let mut shutdown_rx = manager.subscribe_shutdown(&user_id).await;
+    let shutdown = manager.subscribe_shutdown(&user_id).await;
     let mut updated_rx = manager.get_handle_for_problem(problem.id);
     let state_rx = manager.get_handle(user_id, problem.id).await;
     drop(manager);
@@ -146,7 +146,8 @@ async fn websocket_loop(
                                         contest_id: problem.contest_id,
                                         program: request.program().to_string(),
                                         language_key: request.language().to_string(),
-                                        cpu_time: problem.cpu_time,
+                                        // TODO: Memory should not be hardcoded, add memory usage option to problems
+                                        soft_limits: (problem.cpu_time as u64, 1024 * 1024 * 100), // `as` is safe due to DB constraint
                                         op
                                     };
                                     LoopRes::JobStart(job_to_start)
@@ -175,7 +176,7 @@ async fn websocket_loop(
                 let state = state_rx.borrow();
                 LoopRes::Msg(WebSocketMessage::StateUpdate { state: state.clone() })
             }
-            Ok(()) = shutdown_rx.changed() => {
+            _ = shutdown.cancelled() => {
                 LoopRes::Break
             }
             Ok(()) = updated_rx.changed() => {

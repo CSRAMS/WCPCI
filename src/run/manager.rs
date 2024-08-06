@@ -5,6 +5,7 @@ use chrono::NaiveDateTime;
 use log::error;
 use rocket_db_pools::Pool;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::contests::{Contest, Participant};
 use crate::db::{DbPool, DbPoolConnection};
@@ -20,7 +21,7 @@ use super::{JobState, JobStateReceiver};
 
 type UserId = i64;
 
-type RunHandle = Arc<Mutex<Option<(i64, JobStateReceiver, (ShutDownSender, ShutdownReceiver))>>>;
+type RunHandle = Arc<Mutex<Option<(i64, JobStateReceiver, CancellationToken)>>>;
 
 pub type JobStartedMessage = (UserId, i64, JobStateReceiver);
 pub type JobStartedReceiver = tokio::sync::broadcast::Receiver<JobStartedMessage>;
@@ -29,9 +30,6 @@ pub type JobStartedSender = tokio::sync::broadcast::Sender<JobStartedMessage>;
 pub type ProblemUpdatedMessage = ();
 pub type ProblemUpdatedReceiver = tokio::sync::watch::Receiver<ProblemUpdatedMessage>;
 pub type ProblemUpdatedSender = tokio::sync::watch::Sender<ProblemUpdatedMessage>;
-
-pub type ShutdownReceiver = tokio::sync::watch::Receiver<bool>;
-pub type ShutDownSender = tokio::sync::watch::Sender<bool>;
 
 pub struct RunManager {
     config: RunConfig,
@@ -43,7 +41,7 @@ pub struct RunManager {
     job_started_channel: (JobStartedSender, JobStartedReceiver),
     problem_updated_channels: HashMap<i64, ProblemUpdatedSender>,
     leaderboard_handle: LeaderboardManagerHandle,
-    shutdown_rx: ShutdownReceiver,
+    shutdown: CancellationToken,
 }
 
 pub struct ManagerJobRequest {
@@ -52,16 +50,16 @@ pub struct ManagerJobRequest {
     pub contest_id: i64,
     pub program: String,
     pub language_key: String,
-    pub cpu_time: i64,
+    pub soft_limits: (u64, u64),
     pub op: JobOperation,
 }
 
 impl RunManager {
-    pub fn new(
+    pub async fn new(
         config: RunConfig,
         leaderboard_manager: LeaderboardManagerHandle,
         pool: DbPool,
-        shutdown_rx: ShutdownReceiver,
+        shutdown: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = tokio::sync::broadcast::channel(10);
 
@@ -80,7 +78,7 @@ impl RunManager {
             .context("Failed to initialize language runner data")?;
 
         let mut isolation_config = config.isolation.clone();
-        isolation_config.setup()?;
+        isolation_config.setup().await?;
 
         Ok(Self {
             config,
@@ -92,7 +90,7 @@ impl RunManager {
             db_pool: pool,
             job_started_channel: (tx, rx),
             problem_updated_channels: HashMap::with_capacity(5),
-            shutdown_rx,
+            shutdown,
         })
     }
 
@@ -111,16 +109,16 @@ impl RunManager {
         self.job_started_channel.0.subscribe()
     }
 
-    pub async fn subscribe_shutdown(&self, user_id: &UserId) -> ShutdownReceiver {
+    pub async fn subscribe_shutdown(&self, user_id: &UserId) -> CancellationToken {
         if let Some(handle) = self.jobs.get(user_id) {
             let handle = handle.lock().await;
-            if let Some((_, _, (_, rx))) = handle.as_ref() {
-                rx.clone()
+            if let Some((_, _, shutdown)) = handle.as_ref() {
+                shutdown.clone()
             } else {
-                self.shutdown_rx.clone()
+                self.shutdown.clone()
             }
         } else {
-            self.shutdown_rx.clone()
+            self.shutdown.clone()
         }
     }
 
@@ -137,15 +135,15 @@ impl RunManager {
         let contest_id = request.contest_id;
         let program = request.program.clone();
 
-        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let shutdown = CancellationToken::new();
         let (state_tx, state_rx) = tokio::sync::watch::channel(JobState::new_for_op(&request.op));
 
-        let shutdown_rx_handle = shutdown_rx.clone();
+        let shutdown_handle = shutdown.clone();
 
         let handle = Arc::new(Mutex::new(Some((
             problem_id,
             state_rx.clone(),
-            (shutdown_tx, shutdown_rx_handle),
+            shutdown_handle,
         ))));
 
         self.jobs.insert(user_id, handle.clone());
@@ -154,18 +152,18 @@ impl RunManager {
 
         let leaderboard_handle = self.leaderboard_handle.clone();
 
-        let shutdown_rx_job = shutdown_rx.clone();
+        let shutdown_job = shutdown.clone();
 
         let isolation = self.isolation_config.clone();
 
         tokio::spawn(async move {
-            let (state, ran_at) = run_job(&request, state_tx, shutdown_rx_job, &isolation).await;
+            let (state, ran_at) = run_job(&request, state_tx, shutdown_job, &isolation).await;
 
-            handle.lock().await.take();
-            drop(handle);
             if !matches!(state, JobState::Judging { .. }) {
+                handle.lock().await.take();
                 return;
             }
+
             match pool.get().await {
                 Ok(mut conn) => {
                     let run = JudgeRun::from_job_state(
@@ -195,6 +193,7 @@ impl RunManager {
                     error!("Couldn't get db connection: {:?}", e);
                 }
             }
+            handle.lock().await.take();
         });
 
         self.job_started_channel
@@ -274,8 +273,8 @@ impl RunManager {
     pub async fn shutdown_job(&mut self, user_id: UserId) {
         if let Some(handle) = self.jobs.remove(&user_id) {
             let handle = handle.lock().await;
-            if let Some((_, _, (tx, _))) = handle.as_ref() {
-                tx.send(true).ok();
+            if let Some((_, _, shutdown)) = handle.as_ref() {
+                shutdown.cancel();
             }
         }
     }
@@ -283,8 +282,8 @@ impl RunManager {
     pub async fn shutdown(&mut self) {
         for (_, handle) in self.jobs.drain() {
             let handle = handle.lock().await;
-            if let Some((_, _, (tx, _))) = handle.as_ref() {
-                tx.send(true).ok();
+            if let Some((_, _, shutdown)) = handle.as_ref() {
+                shutdown.cancel();
             }
         }
     }
@@ -325,7 +324,7 @@ impl RunManager {
             program: req.program,
             language_key: req.language_key,
             language: language_info,
-            cpu_time: req.cpu_time,
+            soft_limits: req.soft_limits,
             op: req.op,
         })
     }
