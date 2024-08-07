@@ -39,7 +39,7 @@ default_language = "python"
 
 [debug.run.isolation]
 workers_parent = "/tmp"
-include_bins = [ "cc" ]
+include_bins = [ "cc", "ls" ]
 env = { GABAGOOL = "hello" }
 
 [[debug.run.isolation.bind_mounts]]
@@ -162,6 +162,21 @@ include_bins = [ "cc" ]
 compile_cmd = { binary = "ghc", args = [ "main.hs" ] }
 run_cmd = { binary = "./main" }
 
+# -- OCaml
+
+[debug.run.languages.ocaml.display]
+name = "OCaml"
+default_code = """
+print_endline "Hello, World!"
+"""
+tabler_icon = "hexagon-letter-o"
+monaco_contribution = "ocaml" # FIXME: Custom monaco contrib like the one for Haskell?
+
+[debug.run.languages.ocaml.runner]
+file_name = "main.ml"
+compile_cmd = { binary = "ocamlc", args = [ "main.ml", "-o", "main" ] }
+run_cmd = { binary = "./main" }
+
 # -- C#
 
 [debug.run.languages.csharp.display]
@@ -180,7 +195,7 @@ monaco_contribution = "csharp"
 
 [debug.run.languages.csharp.runner]
 file_name = "Program.cs"
-compile_cmd = { binary = "mcs", args = [ "Program.cs" ] }
+compile_cmd = { binary = "csc", args = [ "Program.cs" ] }
 run_cmd = { binary = "mono", args = [ "Program.exe" ] }
 
 # -- C
@@ -223,4 +238,129 @@ file_name = "main.cpp"
 compile_cmd = { binary = "g++", args = [ "main.cpp", "-o", "main" ] }
 run_cmd = { binary = "./main" }
 
-# TODO: Lua, Perl, Ruby, PHP, VB.NET, FSharp, Gleam
+# -- Go
+
+[debug.run.languages.go.display]
+name = "Go"
+default_code = """
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, World!")
+}
+"""
+tabler_icon = "brand-golang"
+monaco_contribution = "go"
+
+[debug.run.languages.go.runner]
+file_name = "main.go"
+compile_cmd = { binary = "go", args = [ "build", "-o", "main", "main.go" ] }
+run_cmd = { binary = "./main" }
+
+# -- Lua
+
+[debug.run.languages.lua.display]
+name = "Lua"
+default_code = """
+print("Hello, World!")
+"""
+tabler_icon = "planet"
+monaco_contribution = "lua"
+
+[debug.run.languages.lua.runner]
+file_name = "main.lua"
+run_cmd = { binary = "lua", args = [ "main.lua" ] }
+
+# -- Perl
+
+[debug.run.languages.perl.display]
+name = "Perl"
+default_code = """
+print "Hello, World!\\n";
+"""
+tabler_icon = "cactus"
+monaco_contribution = "perl"
+
+[debug.run.languages.perl.runner]
+file_name = "main.pl"
+run_cmd = { binary = "perl", args = [ "main.pl" ] }
+
+# -- Ruby
+
+[debug.run.languages.ruby.display]
+name = "Ruby"
+default_code = """
+puts "Hello, World!"
+"""
+tabler_icon = "diamond"
+monaco_contribution = "ruby"
+
+[debug.run.languages.ruby.runner]
+file_name = "main.rb"
+run_cmd = { binary = "ruby", args = [ "main.rb" ] }
+
+# -- PHP
+
+[debug.run.languages.php.display]
+name = "PHP"
+default_code = """
+<?php
+echo "Hello, World!";
+?>
+"""
+tabler_icon = "brand-php"
+monaco_contribution = "php"
+
+[debug.run.languages.php.runner]
+file_name = "main.php"
+run_cmd = { binary = "php", args = [ "-f", "main.php" ] }
+
+# -- F#
+
+[debug.run.languages.fsharp.display]
+name = "F#"
+default_code = """
+open System
+
+[<EntryPoint>]
+let main argv =
+    Console.WriteLine("Hello, World!")
+    0
+"""
+tabler_icon = "hexagon-letter-f"
+monaco_contribution = "fsharp"
+
+[debug.run.languages.fsharp.runner]
+file_name = "main.fs"
+compile_cmd = { binary = "fsharpc", args = [ "--standalone", "main.fs" ] }
+run_cmd = { binary = "mono", args = [ "main.exe" ] }
+
+# -- R
+
+[debug.run.languages.r.display]
+name = "R"
+default_code = """
+cat("Hello, World!")
+"""
+tabler_icon = "hexagon-letter-r"
+monaco_contribution = "r"
+
+[debug.run.languages.r.runner]
+file_name = "main.r"
+run_cmd = { binary = "Rscript", args = [ "--vanilla", "main.r" ] }
+
+# -- Julia
+
+[debug.run.languages.julia.display]
+name = "Julia"
+default_code = """
+println("Hello, World!")
+"""
+tabler_icon = "hexagon-letter-j"
+monaco_contribution = "julia"
+
+[debug.run.languages.julia.runner]
+file_name = "main.jl"
+run_cmd = { binary = "julia", args = [ "-q", "main.jl" ] }

@@ -2,7 +2,16 @@
   python3,
   rustc,
   ghc,
+  ocaml,
   gcc,
+  go,
+  R,
+  julia-bin,
+  lua,
+  perl,
+  ruby,
+  php,
+  fsharp,
   bash,
   typescript,
   nodejs,
@@ -131,6 +140,24 @@ writers.writeTOML "rocket.toml" {
             run_cmd = {binary = "./main";};
           };
         };
+        ocaml = {
+          display = {
+            name = "OCaml";
+            default_code = ''
+              print_endline "Hello, World!"
+            '';
+            tabler_icon = "lambda";
+            monaco_contribution = "ocaml";
+          };
+          runner = {
+            file_name = "main.ml";
+            compile_cmd = {
+              binary = "${ocaml}/bin/ocamlc";
+              args = ["main.ml"];
+            };
+            run_cmd = {binary = "./main";};
+          };
+        };
         typescript = {
           display = {
             name = "TypeScript / JavaScript";
@@ -201,6 +228,160 @@ writers.writeTOML "rocket.toml" {
             run_cmd = {
               binary = "${mono}/bin/mono";
               args = ["Program.exe"];
+            };
+          };
+        };
+        go = {
+          display = {
+            name = "Go";
+            default_code = ''
+              package main
+
+              import "fmt"
+
+              func main() {
+                  fmt.Println("Hello, World!")
+              }
+            '';
+            tabler_icon = "brand-go";
+            monaco_contribution = "go";
+          };
+          runner = {
+            file_name = "main.go";
+            compile_cmd = {
+              binary = "${go}/bin/go";
+              args = ["build" "-o" "main" "main.go"];
+            };
+            run_cmd = {binary = "./main";};
+          };
+        };
+        lua = {
+          display = {
+            name = "Lua";
+            default_code = ''
+              print("Hello, World!")
+            '';
+            tabler_icon = "planet";
+            monaco_contribution = "lua";
+          };
+          runner = {
+            file_name = "main.lua";
+            run_cmd = {
+              binary = "${lua}/bin/lua";
+              args = ["./main.lua"];
+            };
+          };
+        };
+        perl = {
+          display = {
+            name = "Perl";
+            default_code = ''
+              print "Hello, World!\\n";
+            '';
+            tabler_icon = "cactus";
+            monaco_contribution = "perl";
+          };
+          runner = {
+            file_name = "main.pl";
+            run_cmd = {
+              binary = "${perl}/bin/perl";
+              args = ["./main.pl"];
+            };
+          };
+        };
+        ruby = {
+          display = {
+            name = "Ruby";
+            default_code = ''
+              puts "Hello, World!"
+            '';
+            tabler_icon = "diamond";
+            monaco_contribution = "ruby";
+          };
+          runner = {
+            file_name = "main.rb";
+            run_cmd = {
+              binary = "${ruby}/bin/ruby";
+              args = ["./main.rb"];
+            };
+          };
+        };
+        php = {
+          display = {
+            name = "PHP";
+            default_code = ''
+              <?php
+              echo "Hello, World!";
+              ?>
+            '';
+            tabler_icon = "brand-php";
+            monaco_contribution = "php";
+          };
+          runner = {
+            file_name = "main.php";
+            run_cmd = {
+              binary = "${php}/bin/php";
+              args = ["./main.php"];
+            };
+          };
+        };
+        fsharp = {
+          display = {
+            name = "F#";
+            default_code = ''
+              open System
+
+              [<EntryPoint>]
+              let main argv =
+                  printfn "Hello, World!"
+                  0
+            '';
+            tabler_icon = "hexagon-letter-f";
+            monaco_contribution = "fsharp";
+          };
+          runner = {
+            file_name = "main.fs";
+            compile_cmd = {
+              binary = "${mono}/bin/fsharpc";
+              args = ["--standalone" "main.fs"];
+            };
+            run_cmd = {
+              binary = "${mono}/bin/mono";
+              args = ["main.exe"];
+            };
+          };
+        };
+        r = {
+          display = {
+            name = "R";
+            default_code = ''
+              cat("Hello, World!")
+            '';
+            tabler_icon = "hexagon-letter-r";
+            monaco_contribution = "r";
+          };
+          runner = {
+            file_name = "main.r";
+            run_cmd = {
+              binary = "${R}/bin/RScript";
+              args = ["--vanilla" "main.r"];
+            };
+          };
+        };
+        julia = {
+          display = {
+            name = "Julia";
+            default_code = ''
+              println("Hello, World!")
+            '';
+            tabler_icon = "hexagon-letter-j";
+            monaco_contribution = "julia";
+          };
+          runner = {
+            file_name = "main.jl";
+            run_cmd = {
+              binary = "${julia-bin}/bin/julia";
+              args = ["main.jl"];
             };
           };
         };

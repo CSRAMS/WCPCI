@@ -48,6 +48,16 @@ in
       sqlx-cli
       just
       mprocs
+      mono
+      lua
+      perl
+      go
+      ocaml
+      R
+      julia-bin
+      ruby
+      php
+      fsharp
     ];
     shellHook = '''';
   }

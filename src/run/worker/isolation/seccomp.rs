@@ -9,7 +9,7 @@ use seccompiler::{sock_filter, BpfProgram, SeccompAction, SeccompFilter, TargetA
 
 use crate::error::prelude::*;
 
-use super::syscalls::{AARCH64_CALLS, BASE_ALLOWED_SYSCALLS, X86_64_CALLS};
+use super::syscalls::{AARCH64_CALLS, BASE_ALLOWED_SYSCALLS, SPECIAL_CASE_SYSCALLS, X86_64_CALLS};
 
 const fn get_arch() -> TargetArch {
     #[cfg(target_arch = "x86_64")]
@@ -124,6 +124,11 @@ pub fn compile_filter(config: &BpfConfig) -> Result<Vec<SockFilter>> {
                 .ok_or(call)
                 .map(|call| (call as i64, vec![]))
         })
+        .chain(
+            SPECIAL_CASE_SYSCALLS
+                .into_iter()
+                .map(|call| Result::<_, &str>::Ok((call, vec![]))),
+        )
         .collect::<Result<_, _>>()
         .map_err(|call| anyhow!("Unknown syscall for seccomp: {}", call))?;
 

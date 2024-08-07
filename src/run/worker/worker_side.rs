@@ -59,6 +59,8 @@ fn _run_from_child() -> Result {
 }
 
 fn run_cmd(mut cmd: Command, stdin: Option<String>) -> Result {
+    debug!("Running command: `{:?}`", cmd);
+
     let mut child = cmd.spawn().context("Couldn't spawn process")?;
 
     if let Some(stdin_s) = stdin {

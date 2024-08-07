@@ -652,7 +652,11 @@ pub const AARCH64_CALLS: [(&str, i32); 296] = [
     ("writev", 66),
 ];
 
-pub const BASE_ALLOWED_SYSCALLS: [&str; 105] = [
+pub const SPECIAL_CASE_SYSCALLS: [i64; 1] = [
+    1008, // rr framework syscall, julia always uses this syscall and obv this isn't smth we can find through Linux headers
+];
+
+pub const BASE_ALLOWED_SYSCALLS: [&str; 134] = [
     "sched_yield",
     "statx",
     "clock_nanosleep",
@@ -751,11 +755,40 @@ pub const BASE_ALLOWED_SYSCALLS: [&str; 105] = [
     "io_uring_enter",
     "epoll_pwait",
     "pkey_alloc",
+    "getgroups",
     "close_range",
     "fchdir",
     "kill",
     "stat",
+    "bind",
     "rt_sigtimedwait",
     "mkdirat",
+    "fstatfs",
+    "flock",
+    "symlink",
     "nanosleep",
+    "pause",
+    "process_vm_readv",
+    "utimensat",
+    "getpeername",
+    "membarrier",
+    "rt_sigsuspend",
+    "getsid",
+    "sched_setaffinity",
+    "get_mempolicy",
+    "fchmod",
+    "listen",
+    "lstat",
+    "pwrite64",
+    "timer_create",
+    "timer_delete",
+    "mbind",
+    "mincore",
+    "getrlimit",
+    "setrlimit",
+    "dup3",
+    "waitid",
+    "copy_file_range",
+    "fchmodat",
+    "renameat",
 ];
