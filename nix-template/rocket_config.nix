@@ -153,7 +153,7 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.ml";
             compile_cmd = {
               binary = "${ocaml}/bin/ocamlc";
-              args = ["main.ml"];
+              args = ["main.ml" "-o" "main"];
             };
             run_cmd = {binary = "./main";};
           };
@@ -363,7 +363,7 @@ writers.writeTOML "rocket.toml" {
           runner = {
             file_name = "main.r";
             run_cmd = {
-              binary = "${R}/bin/RScript";
+              binary = "${R}/bin/Rscript";
               args = ["--vanilla" "main.r"];
             };
           };
