@@ -6,8 +6,6 @@ use serde::Deserialize;
 const SRI_HASHES_FILE: &str = "sriHashes.json";
 const GRAVATAR_URL: &str = "https://www.gravatar.com/avatar/";
 const GH_AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/";
-const TABLER_URL: &str =
-    "https://raw.githubusercontent.com/tabler/tabler-icons/main/icons/outline/";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,7 +34,7 @@ fn stage_inner(path: &Path) -> AdHoc {
         "frame-ancestors 'none'".to_string(),
         format!("style-src 'self' 'unsafe-inline'"),
         format!("font-src 'self' data:"),
-        format!("img-src 'self' {GRAVATAR_URL} {GH_AVATAR_URL} {TABLER_URL}"),
+        format!("img-src 'self' {GRAVATAR_URL} {GH_AVATAR_URL}"),
         format!(
             "script-src 'self' {} {}",
             join_hashes(&hashes.ext_script_hashes),

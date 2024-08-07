@@ -20,13 +20,15 @@ declare global {
     }
 }
 
+type LanguageDisplayInfo = {
+    name: string;
+    deviconIcon?: string;
+    monacoContribution: string;
+    defaultCode: string;
+};
+
 export type CodeInfo = {
-    [lang: string]: {
-        name: string;
-        tablerIcon: string;
-        monacoContribution: string;
-        defaultCode: string;
-    };
+    [lang: string]: LanguageDisplayInfo;
 };
 
 const getWorker = (workerId: string, label: string): Worker => {
@@ -46,8 +48,8 @@ self.MonacoEnvironment = {
     getWorker
 };
 
-export const makeIconUrl = (name: string) =>
-    `https://raw.githubusercontent.com/tabler/tabler-icons/main/icons/outline/${name}.svg`;
+const getIconName = (key: string, lang: LanguageDisplayInfo) => lang.deviconIcon ?? key;
+const makeIconClass = (icon: string) => `devicon-${icon}-plain`;
 
 export default (
     codeInfo: CodeInfo,
@@ -57,7 +59,7 @@ export default (
     languageDropdown: HTMLSelectElement,
     colorScheme: string,
     editorElem: HTMLElement,
-    languageIcon: HTMLImageElement,
+    languageIcon: HTMLSpanElement,
     saveIndicator: HTMLElement,
     resetButton: HTMLButtonElement,
     mostRecentCode: [string, string] | null
@@ -65,12 +67,19 @@ export default (
     let editor: monaco.editor.IStandaloneCodeEditor | null = null;
     let currentLanguage = defaultLanguage;
 
+    const setLanguageIcon = (name: string) => {
+        const currentClass = languageIcon.className
+            .split(" ")
+            .filter((c) => !c.startsWith("devicon-"));
+        languageIcon.className = [...currentClass, makeIconClass(name)].join(" ");
+    };
+
     languageDropdown.onchange = (e) => {
         const lang = (e.target as HTMLSelectElement).value;
         const langInfo = codeInfo[lang];
         if (langInfo) {
             currentLanguage = lang;
-            languageIcon.src = makeIconUrl(langInfo.tablerIcon);
+            setLanguageIcon(getIconName(lang, langInfo));
             if (editor) {
                 const storedCode = JSON.parse(
                     window.localStorage.getItem(
@@ -101,7 +110,7 @@ export default (
     const langInfo = codeInfo[currentLanguage];
 
     languageDropdown.value = currentLanguage;
-    languageIcon.src = makeIconUrl(langInfo.tablerIcon);
+    setLanguageIcon(getIconName(currentLanguage, langInfo));
     setTimeout(() => languageIcon.classList.remove("opacity-0"), 300);
 
     const mql = matchMedia("(prefers-color-scheme: dark)");

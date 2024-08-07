@@ -48,9 +48,10 @@ impl CommandInfo {
 pub struct LanguageDisplayInfo {
     /// Name of the language
     pub name: String,
-    #[serde(rename = "tablerIcon", alias = "tabler_icon")]
-    /// Name of the icon for the language in [tabler icons](https://tabler.io/icons)
-    pub tabler_icon: String,
+    #[serde(rename = "deviconIcon", alias = "devicon_icon")]
+    /// Override name of the icon for the language in [devicon icons](https://devicon.dev/)
+    /// Uses the language's key as the icon name if not provided
+    pub devicon_icon: Option<String>,
     #[serde(rename = "monacoContribution", alias = "monaco_contribution")]
     /// Name of the monaco contribution for the language
     pub monaco_contribution: String,

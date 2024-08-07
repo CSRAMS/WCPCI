@@ -70,7 +70,6 @@ name = "Bash"
 default_code = """
 echo "Hello, World!"
 """
-tabler_icon = "terminal"
 monaco_contribution = "shell"
 
 [debug.run.languages.bash.runner]
@@ -87,7 +86,6 @@ default_code = """
 print("Hello, World!")
 
 """
-tabler_icon = "brand-python"
 monaco_contribution = "python"
 
 [debug.run.languages.python.runner]
@@ -103,7 +101,6 @@ pub fn main() {
     println!("Hello, World!");
 }
 """
-tabler_icon = "brand-rust"
 monaco_contribution = "rust"
 
 [debug.run.languages.rust.runner]
@@ -123,7 +120,6 @@ public class Man {
     }
 }
 """
-tabler_icon = "coffee"
 monaco_contribution = "java"
 
 [debug.run.languages.java.runner]
@@ -138,7 +134,6 @@ name = "TypeScript / JavaScript"
 default_code = """
 console.log("Hello, World!");
 """
-tabler_icon = "brand-typescript"
 monaco_contribution = "typescript"
 
 [debug.run.languages.typescript.runner]
@@ -153,7 +148,6 @@ name = "Haskell"
 default_code = """
 main = putStrLn "Hello, World!"
 """
-tabler_icon = "lambda"
 monaco_contribution = "haskell"
 
 [debug.run.languages.haskell.runner]
@@ -169,7 +163,6 @@ name = "OCaml"
 default_code = """
 print_endline "Hello, World!"
 """
-tabler_icon = "hexagon-letter-o"
 monaco_contribution = "ocaml" # FIXME: Custom monaco contrib like the one for Haskell?
 
 [debug.run.languages.ocaml.runner]
@@ -190,7 +183,6 @@ public class Program
     }
 }
 """
-tabler_icon = "brand-c-sharp"
 monaco_contribution = "csharp"
 
 [debug.run.languages.csharp.runner]
@@ -210,7 +202,6 @@ int main() {
     return 0;
 }
 """
-tabler_icon = "letter-c"
 monaco_contribution = "c"
 
 [debug.run.languages.c.runner]
@@ -230,7 +221,7 @@ int main() {
     return 0;
 }
 """
-tabler_icon = "brand-cpp"
+devicon_icon = "cplusplus"
 monaco_contribution = "cpp"
 
 [debug.run.languages.cpp.runner]
@@ -251,7 +242,6 @@ func main() {
     fmt.Println("Hello, World!")
 }
 """
-tabler_icon = "brand-golang"
 monaco_contribution = "go"
 
 [debug.run.languages.go.runner]
@@ -266,7 +256,6 @@ name = "Lua"
 default_code = """
 print("Hello, World!")
 """
-tabler_icon = "planet"
 monaco_contribution = "lua"
 
 [debug.run.languages.lua.runner]
@@ -280,7 +269,6 @@ name = "Perl"
 default_code = """
 print "Hello, World!\\n";
 """
-tabler_icon = "cactus"
 monaco_contribution = "perl"
 
 [debug.run.languages.perl.runner]
@@ -294,7 +282,6 @@ name = "Ruby"
 default_code = """
 puts "Hello, World!"
 """
-tabler_icon = "diamond"
 monaco_contribution = "ruby"
 
 [debug.run.languages.ruby.runner]
@@ -310,7 +297,6 @@ default_code = """
 echo "Hello, World!";
 ?>
 """
-tabler_icon = "brand-php"
 monaco_contribution = "php"
 
 [debug.run.languages.php.runner]
@@ -329,7 +315,6 @@ let main argv =
     Console.WriteLine("Hello, World!")
     0
 """
-tabler_icon = "hexagon-letter-f"
 monaco_contribution = "fsharp"
 
 [debug.run.languages.fsharp.runner]
@@ -344,7 +329,6 @@ name = "R"
 default_code = """
 cat("Hello, World!")
 """
-tabler_icon = "hexagon-letter-r"
 monaco_contribution = "r"
 
 [debug.run.languages.r.runner]
@@ -358,7 +342,6 @@ name = "Julia"
 default_code = """
 println("Hello, World!")
 """
-tabler_icon = "hexagon-letter-j"
 monaco_contribution = "julia"
 
 [debug.run.languages.julia.runner]

@@ -19,6 +19,7 @@
   mono,
   writers,
 }:
+# TODO: The backend seems to rebuild when changing this?
 writers.writeTOML "rocket.toml" {
   release = {
     cli_colors = false;
@@ -74,7 +75,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               echo "Hello, World!"
             '';
-            tabler_icon = "terminal";
             monaco_contribution = "shell";
           };
           runner = {
@@ -91,7 +91,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               print("Hello, World!")
             '';
-            tabler_icon = "brand-python";
             monaco_contribution = "python";
           };
           runner = {
@@ -110,7 +109,6 @@ writers.writeTOML "rocket.toml" {
                   println!("Hello, World!");
               }
             '';
-            tabler_icon = "brand-rust";
             monaco_contribution = "rust";
           };
           runner = {
@@ -128,7 +126,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               main = putStrLn "Hello, World!"
             '';
-            tabler_icon = "lambda";
             monaco_contribution = "haskell";
           };
           runner = {
@@ -146,7 +143,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               print_endline "Hello, World!"
             '';
-            tabler_icon = "lambda";
             monaco_contribution = "ocaml";
           };
           runner = {
@@ -189,7 +185,6 @@ writers.writeTOML "rocket.toml" {
                   }
               }
             '';
-            tabler_icon = "coffee";
             monaco_contribution = "java";
           };
           runner = {
@@ -204,6 +199,51 @@ writers.writeTOML "rocket.toml" {
             };
           };
         };
+        c = {
+          display = {
+            name = "C";
+            default_code = ''
+              #include <stdio.h>
+
+              int main() {
+                  printf("Hello, World!\\n");
+                  return 0;
+              }
+            '';
+            monaco_contribution = "c";
+          };
+          runner = {
+            file_name = "main.c";
+            compile_cmd = {
+              binary = "${gcc}/bin/gcc";
+              args = ["main.c" "-o" "main"];
+            };
+            run_cmd = {binary = "./main";};
+          };
+        };
+        cpp = {
+          display = {
+            name = "C++";
+            default_code = ''
+              #include <iostream>
+
+              int main() {
+                  std::cout << "Hello, World!" << std::endl;
+                  return 0;
+              }
+            '';
+            devicon_icon = "cplusplus";
+            monaco_contribution = "cpp";
+          };
+          runner = {
+            file_name = "main.cpp";
+            compile_cmd = {
+              binary = "${gcc}/bin/g++";
+              args = ["main.cpp" "-o" "main"];
+            };
+            run_cmd = {binary = "./main";};
+          };
+        };
         csharp = {
           display = {
             name = "C#";
@@ -216,7 +256,6 @@ writers.writeTOML "rocket.toml" {
                   }
               }
             '';
-            tabler_icon = "brand-c-sharp";
             monaco_contribution = "csharp";
           };
           runner = {
@@ -243,7 +282,6 @@ writers.writeTOML "rocket.toml" {
                   fmt.Println("Hello, World!")
               }
             '';
-            tabler_icon = "brand-go";
             monaco_contribution = "go";
           };
           runner = {
@@ -261,7 +299,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               print("Hello, World!")
             '';
-            tabler_icon = "planet";
             monaco_contribution = "lua";
           };
           runner = {
@@ -278,7 +315,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               print "Hello, World!\\n";
             '';
-            tabler_icon = "cactus";
             monaco_contribution = "perl";
           };
           runner = {
@@ -295,7 +331,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               puts "Hello, World!"
             '';
-            tabler_icon = "diamond";
             monaco_contribution = "ruby";
           };
           runner = {
@@ -314,7 +349,6 @@ writers.writeTOML "rocket.toml" {
               echo "Hello, World!";
               ?>
             '';
-            tabler_icon = "brand-php";
             monaco_contribution = "php";
           };
           runner = {
@@ -336,7 +370,6 @@ writers.writeTOML "rocket.toml" {
                   printfn "Hello, World!"
                   0
             '';
-            tabler_icon = "hexagon-letter-f";
             monaco_contribution = "fsharp";
           };
           runner = {
@@ -357,7 +390,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               cat("Hello, World!")
             '';
-            tabler_icon = "hexagon-letter-r";
             monaco_contribution = "r";
           };
           runner = {
@@ -374,7 +406,6 @@ writers.writeTOML "rocket.toml" {
             default_code = ''
               println("Hello, World!")
             '';
-            tabler_icon = "hexagon-letter-j";
             monaco_contribution = "julia";
           };
           runner = {

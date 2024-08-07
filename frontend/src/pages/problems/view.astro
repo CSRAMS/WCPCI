@@ -11,9 +11,12 @@ import Else from "@/components/tera/Else.astro";
 import For from "@/components/tera/For.astro";
 import If from "@/components/tera/If.astro";
 import Variable from "@/components/tera/Variable.astro";
+import Tag from "@/components/tera/Tag.astro";
 import ContestLayout from "@/layouts/ContestLayout.astro";
 import { tag, themeClass, variable } from "@/lib/tera";
 import { Icon } from "astro-icon/components";
+
+import "devicon/devicon.min.css";
 
 const description = `${variable("problem.name")} from ${variable("contest.name")}, WCPC. ${variable("problem.description | truncate(length=100)")}`;
 const path = `/contests/${variable("contest.id")}/problems/${variable("problem.slug")}`;
@@ -182,16 +185,15 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
             <Tile class="flex min-h-72 grow flex-col gap-2 lg:h-[60%]">
                 <h2 class="text-2xl">Editor</h2>
                 <div class="flex flex-row gap-2">
-                    <img
+                    <i
                         class:list={[
-                            "select-none opacity-0",
-                            themeClass("", "invert", "dark:invert")
+                            "text-2xl",
+                            "my-auto",
+                            "select-none",
+                            `devicon-${variable("default_language")}-plain`
                         ]}
-                        width="32"
-                        height="32"
                         id="language-icon"
-                        alt="Language Icon"
-                    />
+                        aria-label="Language Icon"></i>
                     <Field
                         hideLabel
                         aria-label="Select Language"
@@ -360,7 +362,7 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
         const debugCaseIndicator = document.querySelector("#test-indicator") as HTMLElement;
         const runMessage = document.querySelector("#runs-msg") as HTMLElement;
         const languageDropdown = document.querySelector("#language-dropdown") as HTMLSelectElement;
-        const languageIcon = document.querySelector("#language-icon") as HTMLImageElement;
+        const languageIcon = document.querySelector("#language-icon") as HTMLSpanElement;
         const runMessageWrapper = document.querySelector("#runs-msg-wrapper") as HTMLElement;
         const testButtonTemplate = document.querySelector(
             "#test-debug-template"
