@@ -9,6 +9,7 @@
   julia-bin,
   lua,
   perl,
+  kotlin,
   ruby,
   php,
   fsharp,
@@ -413,6 +414,28 @@ writers.writeTOML "rocket.toml" {
             run_cmd = {
               binary = "${julia-bin}/bin/julia";
               args = ["main.jl"];
+            };
+          };
+        };
+        kotlin = {
+          display = {
+            name = "Kotlin";
+            default_code = ''
+              fun main() {
+                  println("Hello, World!")
+              }
+            '';
+            monaco_contribution = "kotlin";
+          };
+          runner = {
+            file_name = "main.kt";
+            compile_cmd = {
+              binary = "${kotlin}/bin/kotlinc";
+              args = ["main.kt" "-include-runtime" "-d" "main.jar"];
+            };
+            run_cmd = {
+              binary = "${openjdk}/bin/java";
+              args = ["-jar" "main.jar"];
             };
           };
         };

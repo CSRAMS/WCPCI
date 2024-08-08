@@ -347,3 +347,19 @@ monaco_contribution = "julia"
 [debug.run.languages.julia.runner]
 file_name = "main.jl"
 run_cmd = { binary = "julia", args = [ "-q", "main.jl" ] }
+
+# -- Kotlin
+
+[debug.run.languages.kotlin.display]
+name = "Kotlin"
+default_code = """
+fun main() {
+    println("Hello, World!")
+}
+"""
+monaco_contribution = "kotlin"
+
+[debug.run.languages.kotlin.runner]
+file_name = "main.kt"
+compile_cmd = { binary = "kotlinc", args = [ "main.kt", "-include-runtime", "-d", "main.jar" ] }
+run_cmd = { binary = "java", args = [ "-jar", "main.jar" ] }

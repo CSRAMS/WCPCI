@@ -51,6 +51,8 @@ in
       mono
       lua
       perl
+      kotlin
+      gleam
       go
       ocaml
       R
