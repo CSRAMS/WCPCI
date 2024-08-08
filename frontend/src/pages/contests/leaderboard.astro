@@ -41,27 +41,35 @@ const description = `Leaderboard for ${variable("contest.name")}, WCPC`;
             data-contest-end-time={variable("end_local_html")}
             >Leaderboard for <Variable expression="contest.name" /></Title
         >
-        <!-- TODO: Say if the contest has ended? -->
-        <div
-            id="live-indicator"
-            data-live="false"
-            class="group flex flex-row gap-1 text-lg font-bold"
-        >
-            <Icon
-                size={24}
-                name="tabler:circle-filled"
-                class="my-auto hidden animate-pulse text-red-500 group-[[data-live=true]]:inline"
-            />
-            <Icon
-                size={24}
-                name="tabler:circle-x"
-                class="my-auto hidden text-gray-500 group-[[data-live=false]]:inline"
-            />
-            <span class="my-auto hidden text-gray-500 group-[[data-live=false]]:inline"
-                >Not Live, Please Refresh</span
+        <If expression="is_running or not has_started">
+            <div
+                id="live-indicator"
+                data-live="false"
+                class="group flex flex-row gap-1 text-lg font-bold"
             >
-            <span class="my-auto hidden text-red-500 group-[[data-live=true]]:inline">Live</span>
-        </div>
+                <Icon
+                    size={24}
+                    name="tabler:circle-filled"
+                    class="my-auto hidden animate-pulse text-red-500 group-[[data-live=true]]:inline"
+                />
+                <Icon
+                    size={24}
+                    name="tabler:circle-x"
+                    class="my-auto hidden text-gray-500 group-[[data-live=false]]:inline"
+                />
+                <span class="my-auto hidden text-gray-500 group-[[data-live=false]]:inline"
+                    >Not Live, Please Refresh</span
+                >
+                <span class="my-auto hidden text-red-500 group-[[data-live=true]]:inline">Live</span
+                >
+            </div>
+            <Else>
+                <div class="my-4 flex flex-row gap-2 text-blue-500">
+                    <Icon size={24} name="tabler:info-circle" class="my-auto" />
+                    <span class="font-bold">This Contest has Ended!</span>
+                </div>
+            </Else>
+        </If>
     </div>
 
     <If expression="is_running">
