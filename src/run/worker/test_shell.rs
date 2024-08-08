@@ -52,7 +52,7 @@ async fn start(conf: &RunConfig) -> Result {
 
     let mut iso = conf.isolation.clone();
 
-    iso.setup().await.context("Couldn't setup isolation")?;
+    iso.setup(false).await.context("Couldn't setup isolation")?;
 
     const DEBUG_SOFT_LIMITS: (u64, u64) = (5, 1024 * 1024 * 1024);
 
@@ -62,6 +62,7 @@ async fn start(conf: &RunConfig) -> Result {
         shutdown,
         debug_run_info,
         iso,
+        0,
         "Test Shell",
         DEBUG_SOFT_LIMITS,
     )

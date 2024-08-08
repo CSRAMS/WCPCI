@@ -34,12 +34,16 @@ const fn default_hard_memory_limit() -> u64 {
     1024 * 1024 * 350 // 350 MB
 }
 
-const fn default_pid_limit() -> u64 {
-    100
-}
-
 const fn default_nice() -> i32 {
     10
+}
+
+const fn default_shutdown_retry_interval() -> u64 {
+    50
+}
+
+const fn default_shutdown_retries() -> u64 {
+    4
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,12 +87,6 @@ pub struct LimitConfig {
     /// as a hard limit. This should be set above anything you plan to set as a soft limit
     /// Default: 350 MB
     pub hard_memory_limit_bytes: u64,
-    #[serde(default = "default_pid_limit")]
-    /// Cap on the number for PIDs that may be allocated by the user's code
-    /// Keep in mind each test case will spawn a new process, so it's a good
-    /// idea to set this to a fairly high amount
-    /// Default: 100
-    pub pid_limit: u64,
     #[serde(default = "default_nice")]
     /// The niceness delegated to the worker process
     /// This is a value between -20 and 19, with 19 being the lowest priority
@@ -96,6 +94,48 @@ pub struct LimitConfig {
     /// for the worker process.
     /// Default: 10
     pub nice: i32,
+    #[serde(default = "default_shutdown_retry_interval")]
+    /// Milliseconds to wait between trying to force kill the worker
+    /// This should only apply when the worker gets to a state beyond saving
+    /// and should be a relatively low value (<1 sec) as it may block the
+    /// server thread
+    /// Default: 50ms
+    pub shutdown_retry_interval: u64,
+    #[serde(default = "default_shutdown_retries")]
+    /// The amount of times to try force killing the worker before giving up
+    /// This should be a relatively low value (<5) as it may block the server thread
+    /// Default: 4
+    pub shutdown_retries: u64,
+    /// Optional additional controllers to enable for the cgroup
+    /// This is a list of controllers to enable for the cgroup
+    /// Keep in mind `memory` and `cpu` are implicitly enabled as they're needed
+    /// for the runner to function.
+    /// The availability of these controllers is verified before launch
+    ///
+    /// Default: None
+    pub additional_controllers: Option<Vec<String>>,
+    /// Optional properties to write to the cgroup, meant to
+    /// be used in tandem with `additional_controllers`.
+    ///
+    /// For example you may want to set `pids.max` for a cgroup,
+    /// to do so you'd enable the `pids` controller with `additional_controllers`
+    /// and set `pids.max` here.
+    ///
+    /// Note these are written directly to the cgroup, so
+    /// support for these properties aren't checked before launch. Make sure to
+    /// test and be careful.
+    ///
+    /// Also, these properties are applied *before* the compile step is run,
+    /// this means they can't be used to set limits on only the user's code.
+    /// The runner implicitly uses the following properties, if you set these here they
+    /// have a chance of being overridden by the runner, don't depend on them:
+    /// - `memory.high` (to problem limit)
+    /// - `memory.max` (to hard limit in this config)
+    /// - `cpu.weight.nice` (to nice value in this config)
+    /// - `memory.oom.group` (to 1)
+    ///
+    /// Default: None
+    pub additional_properties: Option<HashMap<String, String>>,
 }
 
 impl Default for LimitConfig {
@@ -105,8 +145,11 @@ impl Default for LimitConfig {
             hard_timeout_internal_secs: default_hard_timeout_internal(),
             hard_timeout_user_secs: default_hard_timeout_user(),
             hard_memory_limit_bytes: default_hard_memory_limit(),
-            pid_limit: default_pid_limit(),
+            additional_controllers: None,
+            additional_properties: None,
             nice: default_nice(),
+            shutdown_retry_interval: default_shutdown_retry_interval(),
+            shutdown_retries: default_shutdown_retries(),
         }
     }
 }
@@ -171,24 +214,23 @@ impl IsolationConfig {
         Ok(())
     }
 
-    pub async fn setup(&mut self) -> Result {
+    pub async fn setup(&mut self, allow_cgroup_failure: bool) -> Result {
         if self.limits.nice < -20 || self.limits.nice > 19 {
             bail!(
                 "Invalid nice value: {}, should be in range [-20, 19]",
                 self.limits.nice
             );
         }
-        match cgroup::setup_cgroups().await {
+        match cgroup::setup_cgroups(&self.limits).await {
             Ok(cgroups) => {
                 self.cgroups = Some(cgroups);
             }
             Err(why) => {
-                if cfg!(debug_assertions) {
-                    // TODO: Use rocket profile for this over debug_assertions
+                if allow_cgroup_failure {
                     warn!("Couldn't setup cgroups: {:?}", why);
                     warn!("Because of debug mode, we will continue without cgroups");
-                    warn!("This WILL MAKE RUNNERS NON-FUNCTIONAL, run `just dev-sdrun` to start with systemd-delegated cgroups");
-                    warn!("In production this will be an error");
+                    warn!("This WILL MAKE RUNNERS NON-FUNCTIONAL");
+                    warn!("In the production profile this will be an error");
                 } else {
                     bail!("Couldn't setup cgroups: {}", why);
                 }

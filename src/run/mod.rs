@@ -66,6 +66,7 @@ pub fn stage() -> AdHoc {
         });
 
         let config = rocket.figment().extract_inner::<RunConfig>("run");
+        let profile = rocket.figment().profile();
 
         match config {
             Err(e) => {
@@ -93,9 +94,14 @@ pub fn stage() -> AdHoc {
                 let code_info = serde_json::to_string(&languages_display).unwrap();
                 let leaderboard_manager =
                     rocket.state::<LeaderboardManagerHandle>().unwrap().clone();
-                let manager =
-                    manager::RunManager::new(config.clone(), leaderboard_manager, pool, shutdown)
-                        .await;
+                let manager = manager::RunManager::new(
+                    profile,
+                    config.clone(),
+                    leaderboard_manager,
+                    pool,
+                    shutdown,
+                )
+                .await;
                 match manager {
                     Ok(manager) => Ok(rocket
                         .attach(shutdown_fairing)

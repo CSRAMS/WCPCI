@@ -260,6 +260,7 @@ pub async fn run_job(
     state_tx: JobStateSender,
     shutdown: CancellationToken,
     isolation: &IsolationConfig,
+    pizzaz: u64,
 ) -> (JobState, NaiveDateTime) {
     let started_at = chrono::offset::Utc::now().naive_utc();
     let tx = state_tx.clone();
@@ -270,6 +271,7 @@ pub async fn run_job(
         request,
         request.language.clone(),
         isolation.clone(),
+        pizzaz,
     )
     .await;
     match res {
@@ -294,6 +296,7 @@ async fn _run_job(
     request: &JobRequest,
     language: LanguageRunnerInfo,
     isolation: IsolationConfig,
+    pizzaz: u64,
 ) -> Result<JobState, CaseError> {
     let mut ctx = JobContext::new(request, state_tx);
 
@@ -314,6 +317,7 @@ async fn _run_job(
         shutdown,
         language,
         isolation,
+        pizzaz,
         &diag,
         request.soft_limits,
     )

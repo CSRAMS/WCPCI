@@ -86,6 +86,10 @@ const fn default_max_program_length() -> usize {
     100_000
 }
 
+const fn default_pizzaz() -> u64 {
+    250
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct RunConfig {
@@ -98,6 +102,9 @@ pub struct RunConfig {
     pub default_language: String,
     #[serde(default)]
     pub isolation: IsolationConfig,
+    /// How many milliseconds to wait between cases
+    #[serde(default = "default_pizzaz")]
+    pub pizzaz: u64,
 }
 
 impl RunConfig {

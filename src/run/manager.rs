@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use chrono::NaiveDateTime;
 use log::error;
+use rocket::figment::Profile;
 use rocket_db_pools::Pool;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -56,6 +57,7 @@ pub struct ManagerJobRequest {
 
 impl RunManager {
     pub async fn new(
+        profile: &Profile,
         config: RunConfig,
         leaderboard_manager: LeaderboardManagerHandle,
         pool: DbPool,
@@ -78,7 +80,7 @@ impl RunManager {
             .context("Failed to initialize language runner data")?;
 
         let mut isolation_config = config.isolation.clone();
-        isolation_config.setup().await?;
+        isolation_config.setup(profile.as_str() == "debug").await?;
 
         Ok(Self {
             config,
@@ -133,6 +135,7 @@ impl RunManager {
         let user_id = request.user_id;
         let problem_id = request.problem_id;
         let contest_id = request.contest_id;
+        let pizzaz = self.config.pizzaz;
         let program = request.program.clone();
 
         let shutdown = CancellationToken::new();
@@ -157,7 +160,8 @@ impl RunManager {
         let isolation = self.isolation_config.clone();
 
         tokio::spawn(async move {
-            let (state, ran_at) = run_job(&request, state_tx, shutdown_job, &isolation).await;
+            let (state, ran_at) =
+                run_job(&request, state_tx, shutdown_job, &isolation, pizzaz).await;
 
             if !matches!(state, JobState::Judging { .. }) {
                 handle.lock().await.take();

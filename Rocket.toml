@@ -36,11 +36,11 @@ email = "email"
 [debug.run]
 max_program_length = 100000
 default_language = "python"
+pizzaz = 250
 
 [debug.run.isolation]
 workers_parent = "/tmp"
 include_bins = [ "cc", "ls" ]
-env = { GABAGOOL = "hello" }
 
 [[debug.run.isolation.bind_mounts]]
 src = "/nix/store"

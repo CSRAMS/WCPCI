@@ -25,7 +25,7 @@ use super::{
     isolation::{
         self,
         id_map::{map_uid_gid, MapInfo},
-        CGroup, CGroupStats, IsolationConfig,
+        CGroup, CGroupStats, IsolationConfig, LimitConfig,
     },
     CaseError, CaseResult, CmdResult, InitialWorkerInfo, ServiceMessage, WorkerMessage,
 };
@@ -37,6 +37,7 @@ pub struct Worker {
     cgroup: CGroup,
     last_stat: CGroupStats,
     // CPU time, memory usage
+    limits: LimitConfig,
     soft_limits: (u64, u64),
     shutdown: CancellationToken,
     compile_cmd: Option<CommandInfo>,
@@ -44,8 +45,7 @@ pub struct Worker {
     stdin: ChildStdin,
     env: HashMap<String, String>,
     stdout: BufReader<ChildStdout>,
-    timeout_internal: Duration,
-    timeout_user: Duration,
+    pizzaz: u64,
 }
 
 enum WaitForResult<T> {
@@ -85,12 +85,14 @@ impl Worker {
         Ok(temp_path)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         id: u64,
         program: &str,
         shutdown: CancellationToken,
         run: LanguageRunnerInfo,
         iso: IsolationConfig,
+        pizzaz: u64,
         diag: &str,
         soft_limits: (u64, u64),
     ) -> Result<Self> {
@@ -108,8 +110,12 @@ impl Worker {
             .as_ref()
             .map(|(r, _)| r)
             .context("No cgroup root")?;
-        let cgroup = root_cgroup.create_child(&name, true).await?;
+        let mut cgroup = root_cgroup.create_child(&name, true).await?;
         cgroup.apply_hard_limits(&iso.limits).await?;
+        cgroup.shutdown_config = Some((
+            iso.limits.shutdown_retry_interval,
+            iso.limits.shutdown_retries,
+        ));
 
         let tmp_parent = iso.workers_parent.as_deref();
         let tmp_dir = Self::make_temp(tmp_parent, &name)
@@ -124,11 +130,6 @@ impl Worker {
         let stdout = child.stdout.take().context("Couldn't take child stdout")?;
         let stdout_reader = BufReader::new(stdout);
 
-        let (timeout_internal, timeout_user) = (
-            Duration::from_secs(iso.limits.hard_timeout_internal_secs),
-            Duration::from_secs(iso.limits.hard_timeout_user_secs),
-        );
-
         let mut worker = Self {
             tmp_dir,
             compile_cmd: run.compile_cmd.clone(),
@@ -138,12 +139,12 @@ impl Worker {
             child,
             sub_child_pid: None,
             cgroup,
+            limits: iso.limits.clone(),
             soft_limits,
+            pizzaz,
             last_stat: CGroupStats::default(),
             stdin,
             stdout: stdout_reader,
-            timeout_internal,
-            timeout_user,
         };
 
         let res = worker.init(program, diag, iso, run, map_info).await;
@@ -184,11 +185,6 @@ impl Worker {
         if let WorkerMessage::RequestUidGidMap(pid) = msg {
             self.sub_child_pid = Some(Pid::from_raw(pid));
 
-            // self.cgroup
-            //     .move_pid(pid as i32)
-            //     .await
-            //     .context("Couldn't move PID to cgroup")?;
-
             let res = map_uid_gid(pid, map_info).await;
 
             self.send_message(ServiceMessage::UidGidMapResult(res.is_ok()))
@@ -225,7 +221,7 @@ impl Worker {
             .apply_soft_limits(self.soft_limits.0, self.soft_limits.1 * 1024 * 1024)
             .await?;
         // Sleep for a bit of pizzaz
-        tokio::time::sleep(Duration::from_millis(250)).await;
+        tokio::time::sleep(Duration::from_millis(self.pizzaz)).await;
         self.exec_cmd(self.run_cmd.clone(), stdin.map(|s| s.to_string()), true)
             .await
     }
@@ -292,7 +288,8 @@ impl Worker {
 
         self.send_message(msg).await?;
 
-        let future = self.wait_for_new_message(Some(self.timeout_user));
+        let timeout = Duration::from_secs(self.limits.hard_timeout_user_secs);
+        let future = self.wait_for_new_message(Some(timeout));
 
         tokio::pin!(future);
 
@@ -359,7 +356,8 @@ impl Worker {
         let mut buf = String::new();
         let shutdown_rx = self.shutdown.clone();
 
-        let timeout = timeout.unwrap_or(self.timeout_internal);
+        let timeout =
+            timeout.unwrap_or(Duration::from_secs(self.limits.hard_timeout_internal_secs));
 
         let res = Self::wait_for(self.stdout.read_line(&mut buf), shutdown_rx, timeout).await;
 
@@ -384,7 +382,8 @@ impl Worker {
 
     async fn wait_child(&mut self) -> Result {
         let shutdown_rx = self.shutdown.clone();
-        let res = Self::wait_for(self.child.wait(), shutdown_rx, self.timeout_internal).await;
+        let timeout = Duration::from_secs(self.limits.hard_timeout_internal_secs);
+        let res = Self::wait_for(self.child.wait(), shutdown_rx, timeout).await;
         match res {
             WaitForResult::Ok(status) => {
                 status

@@ -11,6 +11,8 @@ use super::LimitConfig;
 #[derive(Debug, Clone)]
 pub struct CGroup {
     path: PathBuf,
+    // time (ms), retries
+    pub shutdown_config: Option<(u64, u64)>,
     pub ephemeral: bool,
 }
 
@@ -65,6 +67,7 @@ impl CGroup {
         let path = PathBuf::from(CGROUP_ROOT).join(path);
         Ok(Self {
             path,
+            shutdown_config: None,
             ephemeral: false,
         })
     }
@@ -86,11 +89,14 @@ impl CGroup {
         Ok(())
     }
 
-    pub async fn verify_controllers(&self, required_controllers: &[&str]) -> Result {
+    pub async fn verify_controllers<T: AsRef<str> + Display>(
+        &self,
+        required_controllers: &[T],
+    ) -> Result {
         let controllers = self.read_prop("cgroup.controllers").await?;
         let controllers = controllers.split_whitespace().collect::<Vec<_>>();
         for controller in required_controllers {
-            if !controllers.contains(controller) {
+            if !controllers.contains(&controller.to_string().as_str()) {
                 bail!("cgroup controller {} is not supported", controller);
             }
         }
@@ -102,15 +108,26 @@ impl CGroup {
         tokio::fs::create_dir(&path)
             .await
             .with_context(|| format!("Couldn't create cgroup at {}", path.display()))?;
-        Ok(Self { path, ephemeral })
+        Ok(Self {
+            path,
+            shutdown_config: self.shutdown_config,
+            ephemeral,
+        })
     }
 
     pub fn get_child(&self, name: &str, ephemeral: bool) -> Self {
         let path = self.path.join(name);
-        Self { path, ephemeral }
+        Self {
+            path,
+            shutdown_config: self.shutdown_config,
+            ephemeral,
+        }
     }
 
-    pub async fn enable_subtree_control(&self, controllers: &[&str]) -> Result {
+    pub async fn enable_subtree_control<T: AsRef<str> + Display>(
+        &self,
+        controllers: &[T],
+    ) -> Result {
         let controllers = controllers
             .iter()
             .map(|s| format!("+{s}"))
@@ -128,12 +145,6 @@ impl CGroup {
     }
 
     pub async fn apply_hard_limits(&self, lim: &LimitConfig) -> Result {
-        // Set PID limit
-        // TODO: Some systems (mine) don't have this, redo REQUIRED_CONTROLLERS
-        // to allow for this
-        // self.write_prop("pids.max", lim.pid_limit.to_string())
-        //     .await?;
-
         // Set CPU niceness
         self.write_prop("cpu.weight.nice", lim.nice.to_string())
             .await?;
@@ -144,6 +155,11 @@ impl CGroup {
 
         // Ensures when one process in the cgroup is OOM killed, all are
         self.write_prop("memory.oom.group", "1").await?;
+
+        // Additional, user-defined properties
+        for prop in lim.additional_properties.iter().flatten() {
+            self.write_prop(prop.0, prop.1).await?;
+        }
 
         Ok(())
     }
@@ -193,22 +209,16 @@ impl CGroup {
             .with_context(|| format!("Couldn't remove cgroup at {}", self.path.display()))
     }
 
-    // TODO: config
-    const SHUTDOWN_KILL_WAIT_MS: u64 = 50;
-    const SHUTDOWN_GIVE_UP_COUNT: u64 = 4;
-
     pub async fn shutdown(&self) -> Result {
         if self.exists() {
             let mut times = 0;
+            let (time, retries) = self.shutdown_config.unwrap_or((50, 4));
             while self.rm_dir().await.is_err() {
-                if times >= Self::SHUTDOWN_GIVE_UP_COUNT {
+                if times >= retries {
                     bail!("Couldn't remove cgroup at {}", self.path.display());
                 }
                 self.write_prop("cgroup.kill", "1").await?;
-                tokio::time::sleep(std::time::Duration::from_millis(
-                    Self::SHUTDOWN_KILL_WAIT_MS,
-                ))
-                .await;
+                tokio::time::sleep(std::time::Duration::from_millis(time)).await;
                 times += 1;
             }
         }
@@ -218,14 +228,13 @@ impl CGroup {
     pub fn shutdown_sync(&self) -> Result {
         if self.exists() {
             let mut times = 0;
+            let (time, retries) = self.shutdown_config.unwrap_or((50, 4));
             while self.rm_dir_sync().is_err() {
-                if times >= Self::SHUTDOWN_GIVE_UP_COUNT {
+                if times >= retries {
                     bail!("Couldn't remove cgroup at {}", self.path.display());
                 }
                 self.write_prop_sync("cgroup.kill", "1")?;
-                std::thread::sleep(std::time::Duration::from_millis(
-                    Self::SHUTDOWN_KILL_WAIT_MS,
-                ));
+                std::thread::sleep(std::time::Duration::from_millis(time));
                 times += 1;
             }
         }
@@ -307,9 +316,9 @@ impl Display for CGroupStats {
     }
 }
 
-pub async fn setup_cgroups() -> Result<(CGroup, CGroup)> {
+pub async fn setup_cgroups(limit: &LimitConfig) -> Result<(CGroup, CGroup)> {
     // May expand in the future / add config
-    const REQUIRED_CONTROLLERS: [&str; 2] = ["memory", "cpu"];
+    const BASE_REQUIRED_CONTROLLERS: [&str; 2] = ["memory", "cpu"];
     const SERVICE_CGROUP_NAME: &str = "wcpc_service";
 
     let root_group = CGroup::get_current().await?;
@@ -319,9 +328,16 @@ pub async fn setup_cgroups() -> Result<(CGroup, CGroup)> {
         .await
         .context("Couldn't verify cgroup access")?;
     root_group
-        .verify_controllers(&REQUIRED_CONTROLLERS)
+        .verify_controllers(&BASE_REQUIRED_CONTROLLERS)
         .await
         .context("Couldn't verify cgroup controllers")?;
+
+    if let Some(ref additional_controllers) = limit.additional_controllers {
+        root_group
+            .verify_controllers(additional_controllers)
+            .await
+            .context("Couldn't verify additional cgroup controllers")?;
+    }
 
     let current_child = root_group.get_child(SERVICE_CGROUP_NAME, false);
     if current_child.exists() {
@@ -333,7 +349,16 @@ pub async fn setup_cgroups() -> Result<(CGroup, CGroup)> {
     info!("Created new cgroup at {}", new_group.path().display());
     new_group.move_self().await?;
     root_group
-        .enable_subtree_control(&REQUIRED_CONTROLLERS)
-        .await?;
+        .enable_subtree_control(&BASE_REQUIRED_CONTROLLERS)
+        .await
+        .context("Couldn't enable base controllers in subtree control")?;
+
+    if let Some(ref additional_controllers) = limit.additional_controllers {
+        root_group
+            .enable_subtree_control(additional_controllers)
+            .await
+            .context("Couldn't enable additional controllers in subtree control")?;
+    }
+
     Ok((root_group, new_group))
 }
