@@ -210,6 +210,7 @@ We utilize various security features of the Linux kernel to achieve this, we mak
 7. Harden our process a bit more
    1. Set the `no_new_privs` and `dumpable` flags
    2. Setup a `seccomp` filter for syscalls
+8. Use cgroups to apply resource limits
 
 ### Unshare
 
@@ -349,6 +350,22 @@ mismatch_action = { action = "log" }
 ```
 
 As a tip, `auditd` does heavy backlogging of messages, and may lose some if you're not careful. You can increase the backlog size by either editing `/etc/audit/auditd.conf` or by using `sudo auditctl -b`.
+
+### cgroups
+
+cgroups are used as soon as the worker process is created, but they only really matter when
+we start running user code.
+
+WCPC will create a new cgroup with `memory` and `cpu` controllers by default (although users can
+extend this list in the configs) and apply limits the user specifies.
+
+cgroups are also how the service process enforces limits defined per-problem. For CPU time
+the service process will track the CPU time of the cgroup from the moment user code starts
+to the first possible moment after it ends, this isn't 100% accurate but gets very close, and
+is suitable for how CPU time is expected to be used in contests. For memory we simply write
+to the `memory.high` property of the cgroup, by setting this value we tell the kernel to
+slow down if the processes within the group use too much memory. Then, after a user process runs
+we check the amount of times the cgroup broke the high boundary by viewing `memory.events`.
 
 ### Running the User's Code
 
