@@ -267,7 +267,7 @@ run_cmd = { binary = "lua", args = [ "main.lua" ] }
 [debug.run.languages.perl.display]
 name = "Perl"
 default_code = """
-print "Hello, World!\\n";
+print "Hello, World!";
 """
 monaco_contribution = "perl"
 

@@ -14,6 +14,7 @@
   php,
   fsharp,
   bash,
+  coreutils,
   typescript,
   nodejs,
   openjdk,
@@ -61,7 +62,8 @@ writers.writeTOML "rocket.toml" {
 
       isolation = {
         workers_parent = "/tmp";
-        include_bins = ["${gcc}/bin/cc"];
+        # Putting ls here but it'll include the entire dir in PATH
+        include_bins = ["${gcc}/bin/cc" "${coreutils}/bin/ls"];
         bind_mounts = [
           {src = "/nix/store";}
           {src = "/bin/sh";}
@@ -314,7 +316,7 @@ writers.writeTOML "rocket.toml" {
           display = {
             name = "Perl";
             default_code = ''
-              print "Hello, World!\\n";
+              print "Hello, World!";
             '';
             monaco_contribution = "perl";
           };
