@@ -40,7 +40,7 @@ const baseClass = "flex flex-col gap-4 max-w-screen-sm min-w-min";
 
 const status = `${formObj}.status`;
 const alertClass =
-    "flex align-middle gap-2 p-2 rounded-xl text-white border-solid border-2 data-[status=success]:bg-green-600 data-[status=success]:border-green-700 data-[status=error]:bg-red-500 data-[status=error]:border-red-600";
+    "flex align-middle gap-2 p-2 rounded-md text-white border-solid border-2 data-[status=success]:bg-green-600 data-[status=success]:border-green-700 data-[status=error]:bg-red-500 data-[status=error]:border-red-600";
 ---
 
 <form action={action} method={method} class:list={[baseClass, className ?? ""]} {...rest}>
