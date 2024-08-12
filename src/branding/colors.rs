@@ -67,7 +67,7 @@ const COLOR_SCALE: [(u16, i8); 11] = [
 ];
 
 fn lighten_or_darken(color: &Color, amount: f64) -> Color {
-    assert!(-100.0 <= amount && amount <= 100.0);
+    assert!((-100.0..=100.0).contains(&amount));
 
     if amount == 0.0 {
         *color
@@ -103,9 +103,8 @@ fn make_props(name: &str, color: &Color, mul: f64) -> Vec<String> {
 
 fn make_theme(colors: &[(&str, Color)], mul: f64) -> String {
     colors
-        .into_iter()
-        .map(|(name, color)| make_props(name, color, mul))
-        .flatten()
+        .iter()
+        .flat_map(|(name, color)| make_props(name, color, mul))
         .collect()
 }
 

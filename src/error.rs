@@ -1,7 +1,7 @@
 use rocket::{fairing::AdHoc, http::Status, response::Redirect, Request};
 use rocket_dyn_templates::Template;
 
-#[derive(Responder)]
+#[derive(Responder, Debug)]
 pub enum ResponseErr {
     Internal(rocket::response::Debug<anyhow::Error>),
     Status(Status),

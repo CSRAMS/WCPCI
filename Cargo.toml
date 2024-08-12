@@ -12,6 +12,7 @@ chrono-tz = { version = "0.9.0", features = ["serde"] }
 color-art = "0.3.8"
 dotenvy = "0.15.7"
 flate2 = { version = "1.0.30" }
+image = { version = "0.25.2", default-features = false, features = ["png", "ico", "rayon"] }
 log = "0.4.21"
 markdown = "1.0.0-alpha.16"
 nix = { version = "0.29.0", features = ["sched", "mount", "process", "user", "fs", "signal"] }

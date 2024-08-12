@@ -34,7 +34,7 @@ display_name = "firstName"
 email = "email"
 
 [debug.branding]
-# Needs to be here because figment silly
+icon_path = "./icon.png"
 
 [debug.branding.meta]
 tagline = "Compete and Earn Prizes"

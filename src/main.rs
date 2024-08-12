@@ -64,6 +64,7 @@ fn rocket() -> rocket::Rocket<Build> {
         .attach(times::stage())
         .attach(template::stage())
         .attach(serve::stage())
+        .attach(branding::stage())
         .attach(auth::stage())
         .attach(settings::stage())
         .attach(admin::stage())

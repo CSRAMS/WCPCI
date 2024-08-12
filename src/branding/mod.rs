@@ -3,15 +3,18 @@ use image::ImageConfig;
 use meta::MetaConfig;
 
 mod colors;
+mod icon;
 mod image;
 mod meta;
+
+use rocket::fairing::AdHoc;
 
 // TODO:
 // - [x] Setup passing in template.rs, make a new function
 // - [x] Inserting colors into Layout.astro
 // - [x] Edit frontend to actually use customizations
-// - [x] Images
-// - [ ] Favicons
+// - [/] Images (see TODO)
+// - [x] Favicons
 // - [ ] Make browserconfig.xml and friends use this config (new routes?)
 // - [ ] Monaco editor theme based on colors automatically
 // - [ ] Highlight.js theme based on colors automatically
@@ -52,6 +55,9 @@ pub struct BrandingConfig {
     /// Name of the website, used as default for various fields
     #[serde(default = "default_name")]
     pub name: String,
+    /// Path to use for the favicon, this *must* be a PNG file
+    /// Ideally, this should be at least a 512x512 image, as that's the largest size used
+    icon_path: Option<String>,
     #[serde(default)]
     /// Information about the website to be used in meta tags / files
     meta: MetaConfig,
@@ -80,6 +86,7 @@ impl Default for BrandingConfig {
             name: default_name(),
             meta: MetaConfig::default(),
             colors: ColorConfig::default(),
+            icon_path: None,
             images: ImageConfig::default(),
             homepage: HomepageConfig::default(),
             navbar_brand_text: None,
@@ -87,4 +94,10 @@ impl Default for BrandingConfig {
             footer_items: Vec::new(),
         }
     }
+}
+
+pub fn stage() -> AdHoc {
+    AdHoc::on_ignite("Branding Setup", |rocket| async {
+        rocket.attach(icon::stage())
+    })
 }

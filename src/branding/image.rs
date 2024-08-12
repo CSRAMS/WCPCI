@@ -1,3 +1,6 @@
+// TODO: Redo this to convert to webp and not use `public`?
+// could mean we can get rid of public entirely
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageInfo {
     /// Relative path to the image from the public directory (no leading `/` or `.`)
