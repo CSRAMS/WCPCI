@@ -33,6 +33,26 @@ organization = "WCPC"
 display_name = "firstName"
 email = "email"
 
+[debug.branding]
+# Needs to be here because figment silly
+
+[debug.branding.meta]
+tagline = "Compete and Earn Prizes"
+
+[debug.branding.homepage]
+heading_text = "Compete, Learn, and Earn Prizes at WCPC"
+body_text = """
+Join us at the West Chester Programming Competition for a day of free food, problem solving,
+and a chance to win prizes. Any West Chester student is welcome to join.
+"""
+
+[debug.branding.colors]
+# primary = "#00ff00"
+# secondary = "#ff0000"
+# background = "#0000ff"
+# accent = "#ffff00"
+# text = "#ff00ff"
+
 [debug.run]
 max_program_length = 100000
 default_language = "python"

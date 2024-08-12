@@ -18,7 +18,7 @@ import { Icon } from "astro-icon/components";
 
 import "devicon/devicon.min.css";
 
-const description = `${variable("problem.name")} from ${variable("contest.name")}, WCPC. ${variable("problem.description | truncate(length=100)")}`;
+const description = `${variable("problem.name")} from ${variable("contest.name")}, ${variable("branding.name")}. ${variable("problem.description | truncate(length=100)")}`;
 const path = `/contests/${variable("contest.id")}/problems/${variable("problem.slug")}`;
 ---
 

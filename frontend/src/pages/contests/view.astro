@@ -17,7 +17,7 @@ import ContestLayout from "@/layouts/ContestLayout.astro";
 import { tag } from "@/lib/tera";
 import { variable } from "@/lib/tera";
 
-const description = `WCPC ${variable("contest.name")} ${variable("contest.description | truncate(length=100)")}`;
+const description = `${variable("branding.name")} ${variable("contest.name")} ${variable("contest.description | truncate(length=100)")}`;
 ---
 
 <ContestLayout

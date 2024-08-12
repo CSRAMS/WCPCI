@@ -12,6 +12,7 @@ extern crate rocket;
 
 mod admin;
 mod auth;
+mod branding;
 mod contests;
 mod csp;
 mod db;

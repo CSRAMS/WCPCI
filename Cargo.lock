@@ -421,6 +421,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "color-art"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "097466279436dfec57a8d00b9abf55df1496a326e01b57918d5fd776598ad91f"
+dependencies = [
+ "lazy_static",
+ "rand",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3892,6 +3904,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "chrono-tz",
+ "color-art",
  "dotenvy",
  "flate2",
  "log",

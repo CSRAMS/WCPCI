@@ -1,0 +1,54 @@
+---
+import { Icon } from "astro-icon/components";
+import Button from "@/components/Button.astro";
+---
+
+<div
+    data-show="false"
+    data-type="success"
+    id="alert"
+    class:list={[
+        "hidden",
+        "data-[show='true']:flex",
+        "flex-row",
+        "gap-2",
+        "text-white",
+        "group",
+        "data-[type=info]:bg-blue-500",
+        "data-[type=error]:bg-red-500",
+        "data-[type=success]:bg-green-600",
+        "data-[type=warning]:bg-yellow-700",
+        "p-4",
+        "rounded-md",
+        "shadow-md",
+        "fixed",
+        "right-8",
+        "bottom-8",
+        "overflow-hidden",
+        "max-w-[30%]",
+        "z-100"
+    ]}
+>
+    <Icon
+        size={28}
+        name="tabler:info-circle"
+        class="my-auto hidden group-[[data-type=info]]:block"
+    />
+    <Icon size={28} name="tabler:circle-x" class="my-auto hidden group-[[data-type=error]]:block" />
+    <Icon size={28} name="tabler:check" class="my-auto hidden group-[[data-type=success]]:block" />
+    <Icon
+        size={28}
+        name="tabler:alert-triangle"
+        class="my-auto hidden group-[[data-type=warning]]:block"
+    />
+    <span class="my-auto font-bold" id="alert-text">{import.meta.env.DEV ? "Debug Alert" : ""}</span
+    >
+    <Button
+        class="self-top bg-transparent text-white"
+        icon="tabler:x"
+        id="alert-close"
+        justIcon
+        aria-label="Close Alert"
+        color="custom"
+    />
+</div>

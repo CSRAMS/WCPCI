@@ -9,6 +9,7 @@ edition = "2021"
 anyhow = "1.0.82"
 chrono = { version = "0.4.35", default-features = false, features = ["serde", "std", "now"] }
 chrono-tz = { version = "0.9.0", features = ["serde"] }
+color-art = "0.3.8"
 dotenvy = "0.15.7"
 flate2 = { version = "1.0.30" }
 log = "0.4.21"

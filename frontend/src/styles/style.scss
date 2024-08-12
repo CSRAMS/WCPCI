@@ -1,0 +1,33 @@
+@mixin light {
+    --first-color: #aa953a;
+    --second-color: #9babba;
+    --third-color: #b97c2a;
+}
+
+@mixin dark {
+    --first-color: #fad94a;
+    --second-color: #9babba;
+    --third-color: #b97c2a;
+}
+
+:root {
+    @include light;
+    --color-transition-duration: 100ms;
+}
+
+:root.dark {
+    @include dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root.system {
+        @include dark;
+    }
+}
+
+* {
+    transition:
+        color var(--color-transition-duration) linear,
+        background-color var(--color-transition-duration) linear,
+        border-color var(--color-transition-duration) linear;
+}

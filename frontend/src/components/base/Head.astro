@@ -1,0 +1,107 @@
+---
+import "@fontsource/roboto/400.css";
+import "@fontsource/roboto/500.css";
+import "@fontsource/roboto/700.css";
+import "@fontsource/roboto/900.css";
+import "@fontsource/roboto-mono";
+import "@/styles/style.scss";
+
+import { ViewTransitions } from "astro:transitions";
+
+import Variable from "@/components/tera/Variable.astro";
+import { variable } from "@/lib/tera";
+
+export type Props = {
+    title?: string;
+    noIndex?: boolean;
+    descriptionOverride?: string;
+    urlSuffix: string;
+};
+
+const { title, noIndex, descriptionOverride, urlSuffix } = Astro.props;
+
+const urlPrefix = variable("url_prefix()", "https://localhost:4321/");
+const fullUrl = `${urlPrefix}${urlSuffix}`;
+
+const taglineExpr = "branding.meta.tagline | default(value='Online Judge')";
+const siteTitle = variable("branding.meta.title | default(value=branding.name)");
+const tagline = variable(taglineExpr);
+const metaTitle = title ? `${title} - ${siteTitle}` : `${siteTitle} - ${tagline}`;
+const description =
+    descriptionOverride ?? variable(`branding.meta.description | default(value=${taglineExpr})`);
+
+const ogImage = variable("");
+---
+
+<head>
+    <!-- {% set img = branding.images.og_image | default(value=branding.images.hero_image) %} -->
+    <meta charset="UTF-8" />
+    {noIndex && <meta name="robots" content="none" />}
+    <meta name="viewport" content="width=device-width" />
+    <title set:html={metaTitle} />
+    <link rel="canonical" href={fullUrl} />
+    <meta name="description" content={description} />
+    <meta name="keywords" content={variable("branding.meta.keywords")} />
+    <meta name="generator" content=`${Astro.generator} & Tera` />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5" />
+    <meta name="msapplication-TileColor" content="#9f00a7" />
+    <meta name="theme-color" content="#6d3973" />
+    <meta property="og:title" content={metaTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={fullUrl} />
+    <meta property="og:image" content=`${urlPrefix}/${variable("img.public_path")}` />
+    <meta property="og:image:width" content={`${variable("img.width")}px`} />
+    <meta property="og:image:height" content={`${variable("img.height")}px`} />
+    <meta property="og:image:alt" content={variable("img.alt | default(value=branding.name)")} />
+    <meta property="og:site_name" content={siteTitle} />
+    <meta name="twitter:title" content={metaTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content=`${urlPrefix}/${variable("img.public_path")}` />
+    <meta name="twitter:card" content="summary" />
+    <Variable expression="get_color_css() | safe" />
+    <ViewTransitions />
+    <slot />
+</head>
+
+<style is:global>
+    @tailwind base;
+    @tailwind components;
+    @tailwind utilities;
+</style>
+
+<script>
+    document.addEventListener("astro:page-load", () => {
+        const alert = document.getElementById("alert")! as HTMLElement;
+        const alertText = document.getElementById("alert-text")! as HTMLElement;
+        const alertClose = document.getElementById("alert-close")! as HTMLButtonElement;
+
+        alertClose.addEventListener("click", () => {
+            alert.dataset.show = "false";
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        const alertMessage = params.get("msg");
+        const alertType = params.get("msg_type");
+        if (alertMessage && alertType) {
+            alertText.innerText = alertMessage;
+            alert.dataset.type = alertType;
+            alert.dataset.show = "true";
+            params.delete("msg");
+            params.delete("msg_type");
+            const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+            history.replaceState({}, document.title, newUrl);
+            setTimeout(() => {
+                alert.dataset.show = "false";
+            }, 6000);
+        }
+    });
+
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const secure = location.protocol === "https:" ? "; Secure" : ";";
+    document.cookie = `timezone=${encodeURIComponent(timezone)}; SameSite=Lax; max-age=31536000; path=/${secure}`;
+</script>

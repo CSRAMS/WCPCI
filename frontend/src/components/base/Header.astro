@@ -1,0 +1,81 @@
+---
+import Variable from "@/components/tera/Variable.astro";
+import If from "@/components/tera/If.astro";
+import Else from "@/components/tera/Else.astro";
+import Button from "@/components/Button.astro";
+import Avatar from "@/components/Avatar.astro";
+import Tile from "@/components/Tile.astro";
+import Link from "@/components/Link.astro";
+import { variable } from "@/lib/tera";
+
+export type Props = {
+    navSpacerClass?: string;
+    urlSuffix: string;
+    noTemplate?: boolean;
+};
+
+const { navSpacerClass, urlSuffix, noTemplate } = Astro.props;
+---
+
+<header>
+    <Tile as="nav" class="my-4 flex flex-row flex-wrap justify-center gap-2 text-lg font-bold">
+        <Link color="white" aria-label="Home" href="/" class="me-4 flex flex-row gap-2">
+            <img
+                class="my-auto h-auto w-14 drop-shadow"
+                loading="eager"
+                src={`/${variable("branding.images.navbar_logo.public_path")}`}
+                alt={variable(
+                    "branding.images.navbar_logo.alt | default(value=branding.name ~ ' Logo')"
+                )}
+                width={variable("branding.images.navbar_logo.width")}
+                height={variable("branding.images.navbar_logo.height")}
+            />
+            <span class="my-auto text-xl font-bold">
+                <Variable expression="branding.navbar_brand_text | default(value=branding.name)" />
+            </span>
+        </Link>
+        <div class="flex flex-row flex-wrap justify-center gap-4 sm:grow">
+            <nav
+                aria-label="Main navigation"
+                class="flex flex-row flex-wrap justify-center gap-4 justify-self-start"
+            >
+                <Link color="white" class="my-auto" href="/contests">All Contests</Link>
+                <If expression="logged_in and is_admin(user=user)">
+                    <Link color="white" class="my-auto" href="/admin">Site Admin</Link>
+                </If>
+                <slot name="nav-left" />
+            </nav>
+            <span class:list={["hidden grow", navSpacerClass ?? "sm:block"]}></span>
+            {
+                !noTemplate && (
+                    <If debugEval={true} expression="logged_in">
+                        <div class="flex h-fit flex-row justify-center gap-2 justify-self-end align-middle">
+                            <Link
+                                href="/settings/profile"
+                                color="inherit"
+                                class="group flex w-fit flex-row gap-2 rounded-full bg-secondary p-1 hover:text-text-500"
+                            >
+                                <Avatar
+                                    size={45}
+                                    class="group-hover:border-2 group-hover:border-solid group-hover:border-accent"
+                                />
+                            </Link>
+                        </div>
+                        <Else slot="else">
+                            <Button
+                                as="a"
+                                href={`/auth/login?redirect=${urlSuffix}`}
+                                color="primary"
+                                icon="tabler:login-2"
+                                class="my-auto w-fit"
+                                size="lg"
+                            >
+                                Login / Sign-Up
+                            </Button>
+                        </Else>
+                    </If>
+                )
+            }
+        </div>
+    </Tile>
+</header>

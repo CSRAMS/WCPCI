@@ -1,23 +1,9 @@
 ---
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
-import "@fontsource/roboto/900.css";
-import "@fontsource/roboto-mono";
-import { ViewTransitions } from "astro:transitions";
-import hero from "@/assets/hero.png";
-import iconBig from "@/assets/icon_big.png";
-
-import Link from "@/components/Link.astro";
-import { Icon } from "astro-icon/components";
-import Avatar from "@/components/Avatar.astro";
-import Else from "@/components/tera/Else.astro";
-import If from "@/components/tera/If.astro";
-import Tile from "@/components/Tile.astro";
-import Button from "@/components/Button.astro";
-import { themeClass, variable } from "@/lib/tera";
-import { Image } from "astro:assets";
-import { loremIpsum } from "lorem-ipsum";
+import Head from "@/components/base/Head.astro";
+import AlertBox from "@/components/base/AlertBox.astro";
+import Header from "@/components/base/Header.astro";
+import Footer from "@/components/base/Footer.astro";
+import { themeClass } from "@/lib/tera";
 
 export interface Props {
     path: string;
@@ -33,11 +19,9 @@ export interface Props {
     noGrow?: boolean;
 }
 
-const urlPrefix = variable("url_prefix()", "https://wcpc.fun");
-
 const {
     title,
-    description = "Compete in contests and earn prizes at WCPC",
+    description: descriptionOverride,
     path: urlSuffix,
     class: className,
     bodyClass,
@@ -48,53 +32,19 @@ const {
     noTemplate = false,
     noGrow = false
 } = Astro.props;
-
-const fullUrl = `${urlPrefix}${urlSuffix}`;
-
-const metaTitle = title ? `${title} - WCPC` : "WCPC - Compete and Earn Prizes";
 ---
 
 <!doctype html>
-<!-- {% set scheme = user.color_scheme | default(value='UseSystem') %}WCPC {{ version }} -->
+<!-- {% set branding = get_branding() %} --><!-- {% set scheme = user.color_scheme | default(value='UseSystem') %}{{ branding.name }} {{ version }} -->
 <html class:list={["group/root", themeClass("light", "dark", "system")]} lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        {noIndex && <meta name="robots" content="none" />}
-        <meta name="viewport" content="width=device-width" />
-        <title>{metaTitle}</title>
-        <link rel="canonical" href={fullUrl} />
-        <meta name="description" content={description} />
-        <meta
-            name="keywords"
-            content="west chester, programming, competition, contest, python, java"
-        />
-        <meta name="generator" content=`${Astro.generator} & Tera` />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <link rel="manifest" href="/site.webmanifest" />
-        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5" />
-        <meta name="msapplication-TileColor" content="#9f00a7" />
-        <meta name="theme-color" content="#6d3973" />
-        <meta property="og:title" content={metaTitle} />
-        <meta property="og:description" content={description} />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={fullUrl} />
-        <meta property="og:image" content=`${urlPrefix}${hero.src}` />
-        <meta property="og:image:width" content={`${hero.width}px`} />
-        <meta property="og:image:height" content={`${hero.height}px`} />
-        <meta
-            property="og:image:alt"
-            content="WCPC Hero Image, various students are working on their computers for a competition"
-        />
-        <meta property="og:site_name" content="WCPC" />
-        <meta name="twitter:title" content={metaTitle} />
-        <meta name="twitter:description" content={description} />
-        <meta name="twitter:image" content=`${urlPrefix}${hero.src}` />
-        <meta name="twitter:card" content="summary" />
-        <slot name="head" />
-        <ViewTransitions />
-    </head>
+    <Head
+        title={title}
+        descriptionOverride={descriptionOverride}
+        urlSuffix={urlSuffix}
+        noIndex={noIndex}
+    />
+    <slot name="head" />
+
     <body
         class:list={[
             noGrow ? "h-screen max-h-screen overflow-hidden" : "min-h-screen",
@@ -102,124 +52,10 @@ const metaTitle = title ? `${title} - WCPC` : "WCPC - Compete and Earn Prizes";
             bodyClass ?? ""
         ]}
     >
-        <div
-            data-show="false"
-            data-type="success"
-            id="alert"
-            class:list={[
-                "hidden",
-                "data-[show='true']:flex",
-                "flex-row",
-                "gap-2",
-                "text-white",
-                "group",
-                "data-[type=info]:bg-blue-500",
-                "data-[type=error]:bg-red-500",
-                "data-[type=success]:bg-green-600",
-                "data-[type=warning]:bg-yellow-700",
-                "p-4",
-                "rounded-md",
-                "shadow-md",
-                "fixed",
-                "right-8",
-                "bottom-8",
-                "overflow-hidden",
-                "max-w-[30%]",
-                "z-100"
-            ]}
-        >
-            <Icon
-                size={28}
-                name="tabler:info-circle"
-                class="my-auto hidden group-[[data-type=info]]:block"
-            />
-            <Icon
-                size={28}
-                name="tabler:circle-x"
-                class="my-auto hidden group-[[data-type=error]]:block"
-            />
-            <Icon
-                size={28}
-                name="tabler:check"
-                class="my-auto hidden group-[[data-type=success]]:block"
-            />
-            <Icon
-                size={28}
-                name="tabler:alert-triangle"
-                class="my-auto hidden group-[[data-type=warning]]:block"
-            />
-            <span class="my-auto font-bold" id="alert-text"
-                >{import.meta.env.DEV ? loremIpsum() : ""}</span
-            >
-            <Button
-                class="self-top bg-transparent text-white"
-                icon="tabler:x"
-                id="alert-close"
-                justIcon
-                aria-label="Close Alert"
-                color="custom"
-            />
-        </div>
-        <header>
-            <Tile
-                as="nav"
-                class="my-4 flex flex-row flex-wrap justify-center gap-2 text-lg font-bold"
-            >
-                <Link color="white" aria-label="Home" href="/" class="me-4 flex flex-row gap-2">
-                    <Image
-                        class="my-auto h-[45px] w-[45px]"
-                        src={iconBig}
-                        alt="WCPC Logo"
-                        width={50}
-                        height={50}
-                    />
-                    <span class="my-auto text-xl font-bold">WCPC</span>
-                </Link>
-                <div class="flex flex-row flex-wrap justify-center gap-4 sm:grow">
-                    <nav
-                        aria-label="Main navigation"
-                        class="flex flex-row flex-wrap justify-center gap-4 justify-self-start"
-                    >
-                        <Link color="white" class="my-auto" href="/contests">All Contests</Link>
-                        <If expression="logged_in and is_admin(user=user)">
-                            <Link color="white" class="my-auto" href="/admin">Site Admin</Link>
-                        </If>
-                        <slot name="nav-left" />
-                    </nav>
-                    <span class:list={["hidden grow", navSpacerClass ?? "sm:block"]}></span>
-                    {
-                        !noTemplate && (
-                            <If debugEval={true} expression="logged_in">
-                                <div class="flex flex-row justify-center gap-2 justify-self-end align-middle">
-                                    <Link
-                                        href="/settings/profile"
-                                        color="inherit"
-                                        class="group flex w-fit flex-row gap-2 rounded-full bg-secondary p-1 hover:text-text-500"
-                                    >
-                                        <Avatar
-                                            size={45}
-                                            class="group-hover:border-2 group-hover:border-solid group-hover:border-accent"
-                                        />
-                                    </Link>
-                                </div>
-                                <Else slot="else">
-                                    <Button
-                                        as="a"
-                                        href={`/auth/login?redirect=${urlSuffix}`}
-                                        color="primary"
-                                        icon="tabler:login-2"
-                                        class="my-auto w-fit"
-                                        size="lg"
-                                    >
-                                        Login / Sign-Up
-                                    </Button>
-                                </Else>
-                            </If>
-                        )
-                    }
-                </div>
-            </Tile>
-        </header>
+        <AlertBox />
+        <Header navSpacerClass={navSpacerClass} noTemplate={noTemplate} urlSuffix={urlSuffix}>
+            <slot name="nav-left" />
+        </Header>
         <main
             id="main"
             class:list={[
@@ -233,264 +69,6 @@ const metaTitle = title ? `${title} - WCPC` : "WCPC - Compete and Earn Prizes";
         >
             <slot />
         </main>
-        <Tile as="footer" class="my-4 flex flex-row flex-wrap justify-center gap-8 text-center">
-            <span> Run by the West Chester University Computer Science Department </span>
-            <span> Logo from Competitive Programming Club </span>
-            <Link
-                isExternal
-                class="flex flex-row gap-1"
-                href="https://github.com/Bwc9876/WCPCI"
-                color="accent"
-            >
-                <Icon name="tabler:brand-github" size={25} />
-                <span class="my-auto">GitHub Repo</span>
-            </Link>
-        </Tile>
-        <style is:global>
-            @tailwind base;
-            @tailwind components;
-            @tailwind utilities;
-
-            @layer base {
-                * {
-                    transition:
-                        color var(--color-transition-duration) linear,
-                        background-color var(--color-transition-duration) linear,
-                        border-color var(--color-transition-duration) linear;
-                }
-
-                @media (prefers-color-scheme: dark) {
-                    :root.system {
-                        --text-50: #0f0a0f;
-                        --text-100: #1d151e;
-                        --text-200: #3a293d;
-                        --text-300: #583e5b;
-                        --text-400: #755379;
-                        --text-500: #926798;
-                        --text-600: #a886ac;
-                        --text-700: #bea4c1;
-                        --text-800: #d3c2d6;
-                        --text-900: #e9e1ea;
-                        --text-950: #f4f0f5;
-
-                        --background-50: #0f0b0f;
-                        --background-100: #1e151e;
-                        --background-200: #3c2a3c;
-                        --background-300: #5a3f5a;
-                        --background-400: #775577;
-                        --background-500: #956a95;
-                        --background-600: #aa88aa;
-                        --background-700: #c0a5c0;
-                        --background-800: #d5c3d5;
-                        --background-900: #eae1ea;
-                        --background-950: #f4f0f4;
-
-                        --primary-50: #17001a;
-                        --primary-100: #2d0033;
-                        --primary-200: #5a0066;
-                        --primary-300: #870099;
-                        --primary-400: #b400cc;
-                        --primary-500: #e100ff;
-                        --primary-600: #e733ff;
-                        --primary-700: #ed66ff;
-                        --primary-800: #f399ff;
-                        --primary-900: #f9ccff;
-                        --primary-950: #fce5ff;
-
-                        --secondary-50: #100811;
-                        --secondary-100: #201122;
-                        --secondary-200: #412145;
-                        --secondary-300: #613267;
-                        --secondary-400: #81428a;
-                        --secondary-500: #a253ac;
-                        --secondary-600: #b475bd;
-                        --secondary-700: #c798cd;
-                        --secondary-800: #dabade;
-                        --secondary-900: #ecddee;
-                        --secondary-950: #f6eef7;
-
-                        --accent-50: #171202;
-                        --accent-100: #2e2505;
-                        --accent-200: #5c490a;
-                        --accent-300: #8a6e0f;
-                        --accent-400: #b99213;
-                        --accent-500: #e7b718;
-                        --accent-600: #ecc546;
-                        --accent-700: #f0d475;
-                        --accent-800: #f5e2a3;
-                        --accent-900: #faf1d1;
-                        --accent-950: #fdf8e8;
-
-                        --first-color: #fad94a;
-                        --second-color: #9babba;
-                        --third-color: #b97c2a;
-                    }
-                }
-
-                :root {
-                    --color-transition-duration: 100ms;
-                    --text-50: #f4f0f4;
-                    --text-100: #e9e1ea;
-                    --text-200: #d3c3d5;
-                    --text-300: #bca5c0;
-                    --text-400: #a688aa;
-                    --text-500: #906a95;
-                    --text-600: #735577;
-                    --text-700: #563f5a;
-                    --text-800: #3a2a3c;
-                    --text-900: #1d151e;
-                    --text-950: #0e0b0f;
-
-                    --secondary-50: #f4f0f4;
-                    --secondary-100: #eae1ea;
-                    --secondary-200: #d4c4d4;
-                    --secondary-300: #bfa6bf;
-                    --secondary-400: #a989a9;
-                    --secondary-500: #946b94;
-                    --secondary-600: #765676;
-                    --secondary-700: #594059;
-                    --secondary-800: #3b2b3b;
-                    --secondary-900: #1e151e;
-                    --secondary-950: #0f0b0f;
-
-                    --primary-50: #edd8f0;
-                    --primary-100: #e1b9e7;
-                    --primary-200: #d586df;
-                    --primary-300: #da5deb;
-                    --primary-400: #cf2ee4;
-                    --primary-500: #cd00e9;
-                    --primary-600: #a100b6;
-                    --primary-700: #720082;
-                    --primary-800: #4d0057;
-                    --primary-900: #19001d;
-                    --primary-950: #080009;
-
-                    --background-50: #f6eef7;
-                    --background-100: #ecddee;
-                    --background-200: #dabade;
-                    --background-300: #c798cd;
-                    --background-400: #b475bd;
-                    --background-500: #a253ac;
-                    --background-600: #81428a;
-                    --background-700: #613267;
-                    --background-800: #412145;
-                    --background-900: #201122;
-                    --background-950: #100811;
-
-                    --accent-50: #e5d1e8;
-                    --accent-100: #e6bcec;
-                    --accent-200: #d686e1;
-                    --accent-300: #a846b5;
-                    --accent-400: #9b1fab;
-                    --accent-500: #860097;
-                    --accent-600: #720082;
-                    --accent-700: #690077;
-                    --accent-800: #43004c;
-                    --accent-900: #140017;
-                    --accent-950: #060007;
-
-                    --first-color: #aa953a;
-                    --second-color: #9babba;
-                    --third-color: #b97c2a;
-                }
-
-                :root.dark {
-                    --text-50: #0f0a0f;
-                    --text-100: #1d151e;
-                    --text-200: #3a293d;
-                    --text-300: #583e5b;
-                    --text-400: #755379;
-                    --text-500: #926798;
-                    --text-600: #a886ac;
-                    --text-700: #bea4c1;
-                    --text-800: #d3c2d6;
-                    --text-900: #e9e1ea;
-                    --text-950: #f4f0f5;
-
-                    --background-50: #0f0b0f;
-                    --background-100: #1e151e;
-                    --background-200: #3c2a3c;
-                    --background-300: #5a3f5a;
-                    --background-400: #775577;
-                    --background-500: #956a95;
-                    --background-600: #aa88aa;
-                    --background-700: #c0a5c0;
-                    --background-800: #d5c3d5;
-                    --background-900: #eae1ea;
-                    --background-950: #f4f0f4;
-
-                    --primary-50: #17001a;
-                    --primary-100: #2d0033;
-                    --primary-200: #5a0066;
-                    --primary-300: #870099;
-                    --primary-400: #b400cc;
-                    --primary-500: #e100ff;
-                    --primary-600: #e733ff;
-                    --primary-700: #ed66ff;
-                    --primary-800: #f399ff;
-                    --primary-900: #f9ccff;
-                    --primary-950: #fce5ff;
-
-                    --secondary-50: #100811;
-                    --secondary-100: #201122;
-                    --secondary-200: #412145;
-                    --secondary-300: #613267;
-                    --secondary-400: #81428a;
-                    --secondary-500: #a253ac;
-                    --secondary-600: #b475bd;
-                    --secondary-700: #c798cd;
-                    --secondary-800: #dabade;
-                    --secondary-900: #ecddee;
-                    --secondary-950: #f6eef7;
-
-                    --accent-50: #171202;
-                    --accent-100: #2e2505;
-                    --accent-200: #5c490a;
-                    --accent-300: #8a6e0f;
-                    --accent-400: #b99213;
-                    --accent-500: #e7b718;
-                    --accent-600: #ecc546;
-                    --accent-700: #f0d475;
-                    --accent-800: #f5e2a3;
-                    --accent-900: #faf1d1;
-                    --accent-950: #fdf8e8;
-
-                    --first-color: #fad94a;
-                    --second-color: #9babba;
-                    --third-color: #b97c2a;
-                }
-            }
-        </style>
-        <script>
-            document.addEventListener("astro:page-load", () => {
-                const alert = document.getElementById("alert")! as HTMLElement;
-                const alertText = document.getElementById("alert-text")! as HTMLElement;
-                const alertClose = document.getElementById("alert-close")! as HTMLButtonElement;
-
-                alertClose.addEventListener("click", () => {
-                    alert.dataset.show = "false";
-                });
-
-                const params = new URLSearchParams(window.location.search);
-                const alertMessage = params.get("msg");
-                const alertType = params.get("msg_type");
-                if (alertMessage && alertType) {
-                    alertText.innerText = alertMessage;
-                    alert.dataset.type = alertType;
-                    alert.dataset.show = "true";
-                    params.delete("msg");
-                    params.delete("msg_type");
-                    const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
-                    history.replaceState({}, document.title, newUrl);
-                    setTimeout(() => {
-                        alert.dataset.show = "false";
-                    }, 6000);
-                }
-            });
-
-            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const secure = location.protocol === "https:" ? "; Secure" : ";";
-            document.cookie = `timezone=${encodeURIComponent(timezone)}; SameSite=Lax; max-age=31536000; path=/${secure}`;
-        </script>
+        <Footer />
     </body>
 </html>

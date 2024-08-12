@@ -14,7 +14,7 @@ import ContestLayout from "@/layouts/ContestLayout.astro";
 import { variable } from "@/lib/tera";
 import { Icon } from "astro-icon/components";
 
-const description = `Leaderboard for ${variable("contest.name")}, WCPC`;
+const description = `Leaderboard for ${variable("contest.name")} on ${variable("branding.name")}`;
 ---
 
 <ContestLayout
@@ -141,7 +141,6 @@ const description = `Leaderboard for ${variable("contest.name")}, WCPC`;
                     <Link
                         color="accent"
                         underline
-                        class="drop-shadow"
                         href={`/contests/${variable("contest.id")}/problems/${variable("problem.slug")}`}
                     >
                         <Variable expression="problem.name" />
