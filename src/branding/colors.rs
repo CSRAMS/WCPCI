@@ -111,6 +111,9 @@ fn make_theme(colors: &[(&str, Color)], mul: f64) -> String {
 const CSS_TEMPLATE: &str =
     "<style>:root{@light}:root.dark{@dark}@media(prefers-color-scheme:dark){:root.system{@dark}}</style>";
 
+// To match --background-100, as the icon should look good against it
+const THEME_COLOR_AMOUNT: f64 = 70.0;
+
 impl ColorConfig {
     pub fn parse_colors(&self) -> Result<ParsedColorConfig> {
         let primary = Color::from_str(&self.primary).context("Failed to parse primary color")?;
@@ -120,23 +123,30 @@ impl ColorConfig {
         let background =
             Color::from_str(&self.background).context("Failed to parse background color")?;
         let text = Color::from_str(&self.text).context("Failed to parse text color")?;
+        let theme_color = (
+            lighten_or_darken(&background, THEME_COLOR_AMOUNT).hex(),
+            lighten_or_darken(&background, -THEME_COLOR_AMOUNT).hex(),
+        );
         Ok(ParsedColorConfig {
             primary,
             secondary,
             accent,
             background,
             text,
+            theme_color,
         })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ParsedColorConfig {
-    primary: Color,
-    secondary: Color,
-    accent: Color,
-    background: Color,
-    text: Color,
+    pub primary: Color,
+    pub secondary: Color,
+    pub accent: Color,
+    pub background: Color,
+    pub text: Color,
+    // Light, Dark
+    pub theme_color: (String, String),
 }
 
 impl ParsedColorConfig {

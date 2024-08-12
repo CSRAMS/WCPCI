@@ -1,3 +1,8 @@
+use rocket::{http::ContentType, State};
+use serde_json::json;
+
+use super::{colors::ParsedColorConfig, BrandingConfig};
+
 fn default_keywords() -> String {
     "programming, competition, contest".to_string()
 }
@@ -38,4 +43,76 @@ impl Default for MetaConfig {
             keywords: default_keywords(),
         }
     }
+}
+
+pub struct SiteMetaInfo {
+    web_manifest: String,
+    browser_config: String,
+    // For now robots.txt will be a compile-time constant as it never changes
+    // In the future, this could be made dynamic
+    // robots_txt: String,
+}
+
+fn make_browser_config(tile_color: &str) -> String {
+    include_str!("browserconfig.xml").replace("TILE_COLOR", tile_color)
+}
+
+fn make_web_manifest(name: &str, short_name: &str, theme_color: &str) -> String {
+    json!({
+        "name": name,
+        "short_name": short_name,
+        "icons": [
+            {
+                "src": "/android-chrome-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png"
+            },
+            {
+                "src": "/android-chrome-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png"
+            }
+        ],
+        "theme_color": theme_color,
+        "background_color": theme_color,
+        "display": "standalone"
+    })
+    .to_string()
+}
+
+impl SiteMetaInfo {
+    pub fn new(branding_config: &BrandingConfig, parsed_colors: &ParsedColorConfig) -> Self {
+        let name = branding_config
+            .meta
+            .title
+            .as_deref()
+            .unwrap_or(branding_config.name.as_str());
+        let short_name = branding_config.meta.short_name.as_deref().unwrap_or(name);
+
+        Self {
+            web_manifest: make_web_manifest(name, short_name, &parsed_colors.theme_color.0),
+            browser_config: make_browser_config(&parsed_colors.primary.hex()),
+        }
+    }
+}
+
+#[get("/robots.txt")]
+fn robots_txt() -> &'static str {
+    include_str!("robots.txt")
+}
+
+#[get("/site.webmanifest")]
+fn web_manifest(meta_info: &State<SiteMetaInfo>) -> (ContentType, &str) {
+    (ContentType::JSON, &meta_info.web_manifest)
+}
+
+#[get("/browserconfig.xml")]
+fn browser_config(meta_info: &State<SiteMetaInfo>) -> (ContentType, &str) {
+    (ContentType::XML, &meta_info.browser_config)
+}
+
+pub fn stage() -> rocket::fairing::AdHoc {
+    rocket::fairing::AdHoc::on_ignite("Site Meta Info", |rocket| async {
+        rocket.mount("/", routes![robots_txt, web_manifest, browser_config])
+    })
 }

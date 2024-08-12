@@ -7,6 +7,7 @@ mod icon;
 mod image;
 mod meta;
 
+pub use meta::SiteMetaInfo;
 use rocket::fairing::AdHoc;
 
 // TODO:
@@ -98,6 +99,6 @@ impl Default for BrandingConfig {
 
 pub fn stage() -> AdHoc {
     AdHoc::on_ignite("Branding Setup", |rocket| async {
-        rocket.attach(icon::stage())
+        rocket.attach(icon::stage()).attach(meta::stage())
     })
 }

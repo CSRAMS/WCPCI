@@ -6,7 +6,10 @@ use rocket::{fairing::AdHoc, form::Context as FormContext, http::Status};
 use rocket_dyn_templates::Template;
 use tera::Value;
 
-use crate::{branding::BrandingConfig, error::prelude::*};
+use crate::{
+    branding::{BrandingConfig, SiteMetaInfo},
+    error::prelude::*,
+};
 
 type FunctionArgs<'a> = &'a HashMap<String, Value>;
 
@@ -254,9 +257,12 @@ pub fn stage() -> AdHoc {
             }
         };
 
+        let meta_info = SiteMetaInfo::new(&branding, &parsed_colors);
+
         let rocket = rocket
             .manage(branding.clone())
-            .manage(parsed_colors.clone());
+            .manage(parsed_colors.clone())
+            .manage(meta_info);
 
         let color_css = parsed_colors.generate_theme_css();
 
@@ -264,6 +270,7 @@ pub fn stage() -> AdHoc {
             let url_prefix = url_prefix.clone();
             let admins = admins.clone();
             let branding = branding.clone();
+            let parsed_colors = parsed_colors.clone();
             let color_css = color_css.clone();
             e.tera
                 .register_function("get_branding", move |_: FunctionArgs| {
@@ -272,6 +279,10 @@ pub fn stage() -> AdHoc {
             e.tera
                 .register_function("get_color_css", move |_: FunctionArgs| {
                     Ok(tera::Value::String(color_css.clone()))
+                });
+            e.tera
+                .register_function("get_theme_colors", move |_: FunctionArgs| {
+                    Ok(serde_json::to_value(&parsed_colors.theme_color).unwrap())
                 });
             e.tera.register_function("in_debug", in_debug);
             e.tera.register_function("gravatar", gravatar_function);

@@ -46,9 +46,10 @@ const ogImage = variable("");
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-    <!-- <link rel="manifest" href="/site.webmanifest" /> -->
-    <!-- <meta name="msapplication-TileColor" content="#9f00a7" /> -->
-    <!-- <meta name="theme-color" content="#6d3973" /> -->
+    <link rel="manifest" href="/site.webmanifest" />
+    <!-- {% set theme_colors = get_theme_colors() %} -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content={variable("theme_colors[0]")} />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content={variable("theme_colors[1]")} />
     <meta property="og:title" content={metaTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
