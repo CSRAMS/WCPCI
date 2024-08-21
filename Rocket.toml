@@ -16,7 +16,6 @@ redirect_uri = "http://localhost:8000/auth/google/callback"
 url = "http://localhost:8000"
 secret_key = "12345678901234567890123456789012345678901234"
 template_dir = "frontend/dist"
-public_dir = "public"
 admins = [ "bwc9876@example.com" ]
 timezone = "America/New_York"
 # log_level = "debug"
@@ -38,6 +37,14 @@ icon_path = "./icon.png"
 
 [debug.branding.meta]
 tagline = "Compete and Earn Prizes"
+
+[debug.branding.images.hero_image]
+path = "./images/hero_image.webp"
+alt = "Drawing of several students working on computers at WCPC"
+
+[debug.branding.images.navbar_logo]
+path = "./images/navbar_logo.webp"
+alt = "WCPC Logo"
 
 [debug.branding.homepage]
 heading_text = "Compete, Learn, and Earn Prizes at WCPC"

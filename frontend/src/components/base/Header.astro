@@ -23,12 +23,12 @@ const { navSpacerClass, urlSuffix, noTemplate } = Astro.props;
             <img
                 class="my-auto h-auto w-14 drop-shadow"
                 loading="eager"
-                src={`/${variable("branding.images.navbar_logo.public_path")}`}
+                src={`/navbar_logo`}
                 alt={variable(
                     "branding.images.navbar_logo.alt | default(value=branding.name ~ ' Logo')"
                 )}
-                width={variable("branding.images.navbar_logo.width")}
-                height={variable("branding.images.navbar_logo.height")}
+                width={512}
+                height={512}
             />
             <span class="my-auto text-xl font-bold">
                 <Variable expression="branding.navbar_brand_text | default(value=branding.name)" />

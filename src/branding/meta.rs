@@ -49,7 +49,7 @@ pub struct SiteMetaInfo {
     web_manifest: String,
     browser_config: String,
     // For now robots.txt will be a compile-time constant as it never changes
-    // In the future, this could be made dynamic
+    // In the future, this could be made dynamic depending on our routes
     // robots_txt: String,
 }
 

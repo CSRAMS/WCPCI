@@ -51,11 +51,13 @@ const description = variable(descriptionExpr);
         <span class="hidden grow basis-96 lg:inline"></span>
         <div class="min-w-fit">
             <img
-                src={`/${variable("branding.images.hero_image.public_path")}`}
+                src={`/hero_image.webp`}
                 loading="eager"
-                alt={variable("branding.images.hero_image.alt | default(value=branding.name)")}
-                width={variable("branding.images.hero_image.width")}
-                height={variable("branding.images.hero_image.height")}
+                alt={variable(
+                    "branding.images.hero_image.alt | default(value=branding.name ~ ' Hero Image')"
+                )}
+                width={310}
+                height={310}
                 class="mx-auto w-96 rounded-md lg:mx-0"
             />
         </div>

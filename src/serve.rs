@@ -15,17 +15,20 @@ pub fn stage() -> AdHoc {
         );
         let path = template_dir.join("_astro");
         let dir = path.to_str().unwrap();
-        let public_dir = PathBuf::from(
-            figment
-                .find_value("public_dir")
-                .ok()
-                .and_then(|s| s.as_str().map(|s| s.to_string()))
-                .unwrap_or_else(|| "public".to_string()),
-        );
+        let public_dir = figment
+            .find_value("public_dir")
+            .ok()
+            .and_then(|s| s.as_str().map(|s| s.to_string()))
+            .map(PathBuf::from);
+        let rocket = if let Some(public_dir) = public_dir {
+            rocket.mount("/", FileServer::from(public_dir).rank(15))
+        } else {
+            rocket
+        };
+
         let cache_folders = ["/_astro/"].iter().map(|s| s.to_string()).collect();
         rocket
             .mount("/_astro", FileServer::from(dir))
-            .mount("/", FileServer::from(public_dir).rank(15))
             .attach(CachedCompression::path_prefix_fairing(cache_folders))
     })
 }

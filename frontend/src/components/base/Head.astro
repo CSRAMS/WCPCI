@@ -48,21 +48,29 @@ const ogImage = variable("");
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <!-- {% set theme_colors = get_theme_colors() %} -->
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content={variable("theme_colors[0]")} />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content={variable("theme_colors[1]")} />
+    <meta
+        name="theme-color"
+        media="(prefers-color-scheme: light)"
+        content={variable("theme_colors[0]")}
+    />
+    <meta
+        name="theme-color"
+        media="(prefers-color-scheme: dark)"
+        content={variable("theme_colors[1]")}
+    />
     <meta property="og:title" content={metaTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="en" />
     <meta property="og:url" content={fullUrl} />
-    <meta property="og:image" content=`${urlPrefix}/${variable("img.public_path")}` />
-    <meta property="og:image:width" content={`${variable("img.width")}px`} />
-    <meta property="og:image:height" content={`${variable("img.height")}px`} />
+    <meta property="og:image" content=`${urlPrefix}/og_image.wbp` />
+    <meta property="og:image:width" content="310px" />
+    <meta property="og:image:height" content="310px" />
     <meta property="og:image:alt" content={variable("img.alt | default(value=branding.name)")} />
     <meta property="og:site_name" content={siteTitle} />
     <meta name="twitter:title" content={metaTitle} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content=`${urlPrefix}/${variable("img.public_path")}` />
+    <meta name="twitter:image" content=`${urlPrefix}/og_image.webp` />
     <meta name="twitter:image:alt" content={variable("img.alt | default(value=branding.name)")} />
     <meta name="twitter:card" content="summary" />
     <Variable expression="get_color_css() | safe" />

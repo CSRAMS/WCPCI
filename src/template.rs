@@ -7,7 +7,7 @@ use rocket_dyn_templates::Template;
 use tera::Value;
 
 use crate::{
-    branding::{BrandingConfig, SiteMetaInfo},
+    branding::{self, BrandingConfig, SiteMetaInfo},
     error::prelude::*,
 };
 
@@ -260,6 +260,7 @@ pub fn stage() -> AdHoc {
         let meta_info = SiteMetaInfo::new(&branding, &parsed_colors);
 
         let rocket = rocket
+            .attach(branding::image::stage(&branding))
             .manage(branding.clone())
             .manage(parsed_colors.clone())
             .manage(meta_info);

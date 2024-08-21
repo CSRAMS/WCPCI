@@ -4,7 +4,7 @@ use meta::MetaConfig;
 
 mod colors;
 mod icon;
-mod image;
+pub mod image;
 mod meta;
 
 pub use meta::SiteMetaInfo;
@@ -14,9 +14,9 @@ use rocket::fairing::AdHoc;
 // - [x] Setup passing in template.rs, make a new function
 // - [x] Inserting colors into Layout.astro
 // - [x] Edit frontend to actually use customizations
-// - [/] Images (see TODO)
+// - [x] Images (could still be better)
 // - [x] Favicons
-// - [ ] Make browserconfig.xml and friends use this config (new routes?)
+// - [x] Make browserconfig.xml and friends use this config (new routes?)
 // - [ ] Monaco editor theme based on colors automatically
 // - [ ] Highlight.js theme based on colors automatically
 
