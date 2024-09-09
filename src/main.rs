@@ -59,7 +59,6 @@ fn rocket() -> rocket::Rocket<Build> {
     rocket::build()
         .mount("/", routes![index, md_help])
         .attach(error::stage())
-        .attach(csp::stage())
         .attach(db::stage())
         .attach(times::stage())
         .attach(template::stage())

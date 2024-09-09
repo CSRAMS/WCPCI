@@ -1,26 +1,30 @@
-import "monaco-editor/esm/vs/language/typescript/monaco.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/clojure/clojure.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/coffee/coffee.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/shell/shell.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/csharp/csharp.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/dart/dart.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/fsharp/fsharp.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/go/go.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/java/java.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/julia/julia.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/kotlin/kotlin.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/lua/lua.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/objective-c/objective-c.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/pascal/pascal.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/perl/perl.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/php/php.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/python/python.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/r/r.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/ruby/ruby.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/rust/rust.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/scala/scala.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/swift/swift.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution.js";
-import "monaco-editor/esm/vs/basic-languages/vb/vb.contribution.js";
+import { javascript } from "@codemirror/lang-javascript";
+import { python } from "@codemirror/lang-python";
+import { go } from "@codemirror/lang-go";
+import { java } from "@codemirror/lang-java";
+import { php } from "@codemirror/lang-php";
+import { cpp } from "@codemirror/lang-cpp";
+import { rust } from "@codemirror/lang-rust";
+import { julia } from "@plutojl/lang-julia";
+import { clojure } from "@nextjournal/lang-clojure";
+import { csharp } from "@replit/codemirror-lang-csharp";
+import { zig } from "codemirror-lang-zig";
+import { haskell } from "@flok-editor/lang-haskell";
+import { r } from "codemirror-lang-r";
+import { type Extension } from "@codemirror/state";
+
+export default {
+    javascript,
+    python,
+    go,
+    java,
+    php,
+    cpp,
+    rust,
+    julia,
+    clojure,
+    csharp,
+    zig,
+    haskell,
+    r
+} as Record<string, () => Extension>;

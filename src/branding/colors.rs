@@ -109,7 +109,7 @@ fn make_theme(colors: &[(&str, Color)], mul: f64) -> String {
 }
 
 const CSS_TEMPLATE: &str =
-    "<style>:root{@light}:root.dark{@dark}@media(prefers-color-scheme:dark){:root.system{@dark}}</style>";
+    ":root{@light}:root.dark{@dark}@media(prefers-color-scheme:dark){:root.system{@dark}}";
 
 // To match --background-100, as the icon should look good against it
 const THEME_COLOR_AMOUNT: f64 = 70.0;
