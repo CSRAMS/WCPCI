@@ -1,12 +1,15 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import TemplatedTable from "@/components/table/TemplatedTable.astro";
+import { variable } from "@/lib/tera";
 import Button from "@/components/Button.astro";
 import If from "@/components/tera/If.astro";
 import Title from "@/components/Title.astro";
+
+const description = `View current and past contests of ${variable("branding.name")}`;
 ---
 
-<Layout path=`/contests` description="View WCPC Contests" title="Contests" makeTile>
+<Layout path=`/contests` description={description} title="Contests" makeTile>
     <Title>Contests</Title>
     <TemplatedTable
         listName="contests"

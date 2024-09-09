@@ -22,7 +22,7 @@ const statusExprExists = `${tag(`if ${objName}.error and i == ${objName}.amount_
 const statusExpr = `${tag(`if ${objName}`)}${statusExprExists}${tag("else")}empty${tag("endif")}`;
 ---
 
-<div class:list={["flex flex-row gap-2 rounded-2xl", className ?? ""]} {...rest}>
+<div class:list={["flex flex-row gap-2 rounded-lg", className ?? ""]} {...rest}>
     <div class="my-auto flex flex-row flex-wrap gap-2">
         {
             timeExpr && (

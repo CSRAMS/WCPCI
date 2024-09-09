@@ -190,7 +190,7 @@ pub trait CallbackHandler {
                 )
             } else {
                 Ok(Message::error(&format!(
-                    "This {} account is already linked to another WCPC account",
+                    "This {} account is already linked to another account",
                     Self::SERVICE_NAME
                 ))
                 .to("/settings/account"))

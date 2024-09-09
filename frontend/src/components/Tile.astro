@@ -6,6 +6,6 @@ export type Props<T extends HTMLTag> = Polymorphic<{ as: T }>;
 const { as: Component = "div", class: className, ...rest } = Astro.props;
 ---
 
-<Component class:list={["rounded-2xl bg-background-100 p-4", className ?? ""]} {...rest}>
+<Component class:list={["rounded-lg bg-background-100 p-4", className ?? ""]} {...rest}>
     <slot />
 </Component>

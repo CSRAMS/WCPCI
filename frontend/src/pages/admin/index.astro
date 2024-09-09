@@ -54,7 +54,9 @@ import Layout from "@/layouts/Layout.astro";
         <h2 class="text-2xl font-bold">Info</h2>
         <p>Start Time: <code><Variable expression="start_time" /></code></p>
         <h3 class="text-xl font-bold">Versions</h3>
-        <p>WCPC: <code><Variable expression="version" /></code></p>
+        <p>
+            <Variable expression="branding.name" />: <code><Variable expression="version" /></code>
+        </p>
         <p>
             rustc: <code><Variable expression="rustc_version" /></code>
             <p>Astro: <code>{Astro.generator}</code></p>

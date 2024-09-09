@@ -235,7 +235,11 @@ async fn acs(
                 .context("Couldn't log-in / register user")?;
 
             if is_new {
-                Ok(Message::info(&format!("Welcome to WCPC, {}! Please look through your settings before joining a competition", user.default_display_name)).to("/settings/profile"))
+                Ok(Message::info(&format!(
+                    "Welcome {}! Please look through your settings before joining a competition",
+                    user.default_display_name
+                ))
+                .to("/settings/profile"))
             } else {
                 Ok(Redirect::to(relay_state))
             }

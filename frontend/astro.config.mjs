@@ -14,10 +14,10 @@ export default defineConfig({
         format: "file"
     },
     prefetch: false,
-    compressHTML: true,
+    compressHTML: false,
     integrations: [
         tailwind({ nesting: true }),
-        icon({ include: { "devicons-plain": ["*"] } }),
+        icon(),
         shield({ sri: { hashesModule: modulePath } })
     ]
 });

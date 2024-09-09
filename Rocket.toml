@@ -16,7 +16,6 @@ redirect_uri = "http://localhost:8000/auth/google/callback"
 url = "http://localhost:8000"
 secret_key = "12345678901234567890123456789012345678901234"
 template_dir = "frontend/dist"
-public_dir = "public"
 admins = [ "bwc9876@example.com" ]
 timezone = "America/New_York"
 # log_level = "debug"
@@ -32,6 +31,34 @@ organization = "WCPC"
 [debug.saml.attrs]
 display_name = "firstName"
 email = "email"
+
+[debug.branding]
+icon_path = "./icon.png"
+
+[debug.branding.meta]
+tagline = "Compete and Earn Prizes"
+
+[debug.branding.images.hero_image]
+path = "./images/hero_image.webp"
+alt = "Drawing of several students working on computers at WCPC"
+
+[debug.branding.images.navbar_logo]
+path = "./images/navbar_logo.webp"
+alt = "WCPC Logo"
+
+[debug.branding.homepage]
+heading_text = "Compete, Learn, and Earn Prizes at WCPC"
+body_text = """
+Join us at the West Chester Programming Competition for a day of free food, problem solving,
+and a chance to win prizes. Any West Chester student is welcome to join.
+"""
+
+[debug.branding.colors]
+# primary = "#00ff00"
+# secondary = "#ff0000"
+# background = "#0000ff"
+# accent = "#ffff00"
+# text = "#ff00ff"
 
 [debug.run]
 max_program_length = 100000

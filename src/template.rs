@@ -1,9 +1,16 @@
 use std::collections::HashMap;
 
+use anyhow::Context;
 use markdown::{CompileOptions, Constructs, Options, ParseOptions};
-use rocket::{fairing::AdHoc, form::Context, http::Status};
+use openssl::{base64, sha::sha256};
+use rocket::{fairing::AdHoc, form::Context as FormContext, http::Status};
 use rocket_dyn_templates::Template;
 use tera::Value;
+
+use crate::{
+    branding::{self, BrandingConfig, SiteMetaInfo},
+    error::prelude::*,
+};
 
 type FunctionArgs<'a> = &'a HashMap<String, Value>;
 
@@ -58,7 +65,7 @@ impl FormTemplateObject {
         }
     }
 
-    pub fn from_rocket_context(mut form: impl TemplatedForm, value: &Context<'_>) -> Self {
+    pub fn from_rocket_context(mut form: impl TemplatedForm, value: &FormContext<'_>) -> Self {
         let defaults = form.get_defaults();
         let data = value
             .fields()
@@ -223,16 +230,71 @@ macro_rules! context_with_base_authed {
 }
 
 pub fn stage() -> AdHoc {
-    AdHoc::on_ignite("Templating", |rocket| async {
+    AdHoc::try_on_ignite("Templating", |rocket| async {
         let figment = rocket.figment();
         let url_prefix = figment.extract_inner::<String>("url").unwrap_or_default();
         let admins = figment
             .extract_inner::<Vec<String>>("admins")
             .unwrap_or_default();
+        let branding = figment
+            .extract_inner::<Option<BrandingConfig>>("branding")
+            .context("Invalid branding found");
 
-        rocket.attach(Template::custom(move |e| {
+        let branding: BrandingConfig = match branding {
+            Ok(b) => b.unwrap_or_default(),
+            Err(e) => {
+                error!("Failed to load branding: {:?}", e);
+                return Err(rocket);
+            }
+        };
+
+        let parsed_colors = branding.colors.parse_colors();
+
+        let parsed_colors = match parsed_colors {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Failed to parse colors: {:?}", e);
+                return Err(rocket);
+            }
+        };
+
+        let meta_info = SiteMetaInfo::new(&branding, &parsed_colors);
+
+        let color_css = parsed_colors.generate_theme_css();
+
+        let color_css_hash = base64::encode_block(&sha256(color_css.as_bytes()));
+
+        let theme_style_tag = format!(
+            "<style integrity=\"sha256-{}\" id=\"theme\">{}</style>",
+            color_css_hash.clone(),
+            color_css.clone()
+        );
+
+        let rocket = rocket
+            .attach(crate::csp::stage())
+            .attach(branding::image::stage(&branding))
+            .manage(branding.clone())
+            .manage(parsed_colors.clone())
+            .manage(meta_info);
+
+        Ok(rocket.attach(Template::custom(move |e| {
             let url_prefix = url_prefix.clone();
             let admins = admins.clone();
+            let branding = branding.clone();
+            let parsed_colors = parsed_colors.clone();
+            let theme_style_tag = theme_style_tag.clone();
+            e.tera
+                .register_function("get_branding", move |_: FunctionArgs| {
+                    Ok(serde_json::to_value(&branding).unwrap())
+                });
+            e.tera
+                .register_function("get_color_css", move |_: FunctionArgs| {
+                    Ok(tera::Value::String(theme_style_tag.clone()))
+                });
+            e.tera
+                .register_function("get_theme_colors", move |_: FunctionArgs| {
+                    Ok(serde_json::to_value(&parsed_colors.theme_color).unwrap())
+                });
             e.tera.register_function("in_debug", in_debug);
             e.tera.register_function("gravatar", gravatar_function);
             e.tera.register_function("fake_attr", fake_attr);
@@ -258,6 +320,6 @@ pub fn stage() -> AdHoc {
                         Err(tera::Error::msg("user object not passed!"))
                     }
                 });
-        }))
+        })))
     })
 }

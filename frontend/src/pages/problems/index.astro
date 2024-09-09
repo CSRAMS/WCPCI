@@ -8,7 +8,7 @@ import BreadCrumb from "@/components/BreadCrumb.astro";
 import Title from "@/components/Title.astro";
 import Variable from "@/components/tera/Variable.astro";
 
-const description = `View the problems for ${variable("contest.name")}, WCPC`;
+const description = `View the problems for ${variable("contest.name")}, ${variable("branding.name")}`;
 ---
 
 <ContestLayout

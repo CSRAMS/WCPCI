@@ -1,0 +1,33 @@
+---
+import If from "@/components/tera/If.astro";
+import Else from "@/components/tera/Else.astro";
+import For from "@/components/tera/For.astro";
+import Variable from "@/components/tera/Variable.astro";
+import Link from "@/components/Link.astro";
+import Tile from "@/components/Tile.astro";
+import { teraIf, variable } from "@/lib/tera";
+---
+
+<If expression="branding.footer_items | length > 0">
+    <Tile as="footer" class="my-4 flex flex-row flex-wrap justify-center gap-8 text-center">
+        <For sourceList="branding.footer_items" itemName="item">
+            <If expression="item.type == 'Link'">
+                <Link
+                    href={variable("item.url")}
+                    color="white"
+                    class="my-auto"
+                    target={teraIf("item.new_tab", "_blank", "_self")}
+                    rel="noopener"
+                >
+                    <Variable expression="item.text" />
+                </Link>
+                <Else slot="else">
+                    <Variable expression="item.text" />
+                </Else>
+            </If>
+        </For>
+    </Tile>
+    <Else slot="else">
+        <span class="my-4"></span>
+    </Else>
+</If>

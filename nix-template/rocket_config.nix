@@ -62,7 +62,7 @@ writers.writeTOML "rocket.toml" {
 
       isolation = {
         workers_parent = "/tmp";
-        # Putting ls here but it'll include the entire dir in PATH
+        # Putting ls here so it'll include the entire coreutils dir in PATH
         include_bins = ["${gcc}/bin/cc" "${coreutils}/bin/ls"];
         bind_mounts = [
           {src = "/nix/store";}

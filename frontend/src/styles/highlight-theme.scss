@@ -1,15 +1,73 @@
-@use "sass:meta";
-
-@media (prefers-color-scheme: dark) {
-    :root.system {
-        @include meta.load-css("highlight.js/styles/an-old-hope");
-    }
+pre code.hljs {
+    display: block;
+    overflow-x: auto;
+    padding: 1em;
 }
 
-:root {
-    @include meta.load-css("highlight.js/styles/a11y-light");
+code.hljs {
+    padding: 3px 5px;
 }
 
-:root.dark {
-    @include meta.load-css("highlight.js/styles/an-old-hope");
+.hljs {
+    background: var(--background-50);
+    color: var(--text-900);
+}
+
+.hljs-punctuation {
+    color: var(--text-900);
+}
+
+.hljs-comment,
+.hljs-quote {
+    color: var(--text-300);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+    color: var(--primary-300);
+}
+
+.hljs-number,
+.hljs-built_in,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+    color: var(--accent-500);
+}
+
+.hljs-attribute {
+    color: var(--accent-600);
+}
+
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+    color: var(--secondary-500);
+}
+
+.hljs-title,
+.hljs-section {
+    color: var(--primary-800);
+}
+
+.hljs-keyword,
+.hljs-selector-tag {
+    color: var(--secondary-700);
+}
+
+.hljs-emphasis {
+    font-style: italic;
+}
+
+.hljs-strong {
+    font-weight: bold;
 }

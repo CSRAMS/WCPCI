@@ -13,6 +13,6 @@ import DeleteForm from "@/components/forms/DeleteForm.astro";
             ["Delete User", `/admin/users/${variable("target_user.id")}/delete`]
         ]}
         backLink="/admin/users"
-        prompt={`Are you sure you want to delete user ${variable("user.email")} from WCPC? This will also clear all their submissions and scores.`}
+        prompt={`Are you sure you want to delete user ${variable("user.email")} from ${variable("branding.name")}? This will also clear all their submissions and scores.`}
     />
 </Layout>

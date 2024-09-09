@@ -11,4 +11,4 @@ runCommand "wcpc-wrapper" {
   inherit version;
   meta.mainProgram = "wcpc";
 }
-"makeWrapper ${backend}/bin/wcpc $out/bin/wcpc --set ROCKET_TEMPLATE_DIR ${frontend} --set ROCKET_PUBLIC_DIR ${../public} --set ROCKET_CONFIG ${rocket_config}"
+"makeWrapper ${backend}/bin/wcpc $out/bin/wcpc --set ROCKET_TEMPLATE_DIR ${frontend} --set ROCKET_CONFIG ${rocket_config}"

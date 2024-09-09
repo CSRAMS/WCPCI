@@ -11,14 +11,13 @@ import Else from "@/components/tera/Else.astro";
 import For from "@/components/tera/For.astro";
 import If from "@/components/tera/If.astro";
 import Variable from "@/components/tera/Variable.astro";
-import Tag from "@/components/tera/Tag.astro";
 import ContestLayout from "@/layouts/ContestLayout.astro";
 import { tag, themeClass, variable } from "@/lib/tera";
 import { Icon } from "astro-icon/components";
-
 import "devicon/devicon.min.css";
+import "@/styles/cm-theme.scss";
 
-const description = `${variable("problem.name")} from ${variable("contest.name")}, WCPC. ${variable("problem.description | truncate(length=100)")}`;
+const description = `${variable("problem.name")} from ${variable("contest.name")}, ${variable("branding.name")}. ${variable("problem.description | truncate(length=100)")}`;
 const path = `/contests/${variable("contest.id")}/problems/${variable("problem.slug")}`;
 ---
 
@@ -137,7 +136,7 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
             />
         </If>
     </Tile>
-    <div class="flex min-h-0 grow flex-col gap-4 lg:min-h-[100vh] lg:flex-row">
+    <div class="flex min-h-0 grow flex-col gap-4 lg:h-[100vh] lg:flex-row">
         <Tile
             class="group flex max-h-[100vh] flex-row gap-1 overflow-hidden lg:!p-0 lg:has-[[data-expanded='true']]:w-2/5"
         >
@@ -232,12 +231,9 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
                         color="secondary"
                     />
                 </div>
-                <div
-                    id="editor"
-                    class="align-center flex min-h-0 w-full grow justify-center rounded-2xl bg-background-50 p-2"
-                >
+                <div id="editor" class="flex min-h-0 w-full grow rounded-lg bg-background-50 p-2">
                     <Icon
-                        class="my-auto animate-pulse text-blue-300"
+                        class="m-auto hidden animate-pulse text-blue-300 only:flex"
                         name="tabler:pencil"
                         size={60}
                     />
@@ -335,11 +331,11 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
 <script>
     import type { CodeInfo } from "@/lib/editor";
     import type { WebSocketRequest } from "@/lib/problem_ws";
+    import type { EditorView } from "@codemirror/view";
     import confetti from "canvas-confetti";
-    import type * as monaco from "monaco-editor";
 
     let ws: WebSocket | null = null;
-    let editor: monaco.editor.IStandaloneCodeEditor | null = null;
+    let editor: EditorView | null = null;
     let getLang: (() => string) | null = null;
 
     document.addEventListener("astro:page-load", () => {
@@ -445,7 +441,7 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
         }
 
         import("@/lib/editor").then((c) => {
-            console.debug("Creating editor");
+            console.debug("Creating Editor");
             const [newEditor, _getLang] = c.default(
                 codeInfo,
                 defaultLanguage,
@@ -459,7 +455,7 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
                 resetButton,
                 mostRecentCode
             );
-            editor = newEditor as monaco.editor.IStandaloneCodeEditor;
+            editor = newEditor as EditorView;
             getLang = _getLang as () => string;
         });
 
@@ -503,7 +499,7 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
                     type: "test",
                     input: testInput.value,
                     language: getLang(),
-                    program: editor.getValue()
+                    program: editor.state.doc.toString()
                 };
                 console.debug("Sending request", req);
                 ws.send(JSON.stringify(req));
@@ -515,7 +511,7 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
             if (editor && ws && getLang) {
                 const req: WebSocketRequest = {
                     type: "judge",
-                    program: editor.getValue(),
+                    program: editor.state.doc.toString(),
                     language: getLang()
                 };
                 console.debug("Sending request", req);
@@ -535,7 +531,7 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
             ws = null;
         }
         if (editor) {
-            editor.dispose();
+            editor.destroy();
             editor = null;
         }
         if (getLang) {
@@ -598,7 +594,7 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
     }
 
     #rendered-md pre code.hljs {
-        @apply rounded-lg !bg-secondary-50;
+        @apply rounded-sm !bg-secondary-50;
     }
 
     #rendered-md

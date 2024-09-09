@@ -12,6 +12,7 @@ extern crate rocket;
 
 mod admin;
 mod auth;
+mod branding;
 mod contests;
 mod csp;
 mod db;
@@ -58,11 +59,11 @@ fn rocket() -> rocket::Rocket<Build> {
     rocket::build()
         .mount("/", routes![index, md_help])
         .attach(error::stage())
-        .attach(csp::stage())
         .attach(db::stage())
         .attach(times::stage())
         .attach(template::stage())
         .attach(serve::stage())
+        .attach(branding::stage())
         .attach(auth::stage())
         .attach(settings::stage())
         .attach(admin::stage())
