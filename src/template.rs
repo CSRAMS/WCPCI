@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use markdown::{CompileOptions, Constructs, Options, ParseOptions};
+use openssl::{base64, sha::sha256};
 use rocket::{fairing::AdHoc, form::Context as FormContext, http::Status};
 use rocket_dyn_templates::Template;
 use tera::Value;
@@ -259,27 +260,36 @@ pub fn stage() -> AdHoc {
 
         let meta_info = SiteMetaInfo::new(&branding, &parsed_colors);
 
+        let color_css = parsed_colors.generate_theme_css();
+
+        let color_css_hash = base64::encode_block(&sha256(color_css.as_bytes()));
+
+        let theme_style_tag = format!(
+            "<style integrity=\"sha256-{}\" id=\"theme\">{}</style>",
+            color_css_hash.clone(),
+            color_css.clone()
+        );
+
         let rocket = rocket
+            .attach(crate::csp::stage())
             .attach(branding::image::stage(&branding))
             .manage(branding.clone())
             .manage(parsed_colors.clone())
             .manage(meta_info);
-
-        let color_css = parsed_colors.generate_theme_css();
 
         Ok(rocket.attach(Template::custom(move |e| {
             let url_prefix = url_prefix.clone();
             let admins = admins.clone();
             let branding = branding.clone();
             let parsed_colors = parsed_colors.clone();
-            let color_css = color_css.clone();
+            let theme_style_tag = theme_style_tag.clone();
             e.tera
                 .register_function("get_branding", move |_: FunctionArgs| {
                     Ok(serde_json::to_value(&branding).unwrap())
                 });
             e.tera
                 .register_function("get_color_css", move |_: FunctionArgs| {
-                    Ok(tera::Value::String(color_css.clone()))
+                    Ok(tera::Value::String(theme_style_tag.clone()))
                 });
             e.tera
                 .register_function("get_theme_colors", move |_: FunctionArgs| {

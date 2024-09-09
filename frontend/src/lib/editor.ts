@@ -1,24 +1,8 @@
-import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
-import "@/lib/editorLanguages";
-import "@/lib/editorFeatures";
-import monacoDarkTheme from "@/lib/wcpc-monaco-dark.json";
-import monacoLightTheme from "@/lib/wcpc-monaco-light.json";
-
-import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import JsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
-
-import registerHaskell from "@/lib/haskell";
-
-monaco.editor.defineTheme("wcpc-dark", monacoDarkTheme as any);
-monaco.editor.defineTheme("wcpc-light", monacoLightTheme as any);
-
-registerHaskell(monaco);
-
-declare global {
-    interface Window {
-        stylesClone?: HTMLStyleElement;
-    }
-}
+import editorLanguages from "@/lib/editorLanguages";
+import baseExt from "@/lib/editorFeatures";
+import { EditorView } from "@codemirror/view";
+import { Compartment, EditorState } from "@codemirror/state";
+import editorHighlightTheme from "./editorHighlightTheme";
 
 type LanguageDisplayInfo = {
     name: string;
@@ -29,23 +13,6 @@ type LanguageDisplayInfo = {
 
 export type CodeInfo = {
     [lang: string]: LanguageDisplayInfo;
-};
-
-const getWorker = (workerId: string, label: string): Worker => {
-    console.debug(`Creating worker for ${label}`, workerId);
-    switch (label) {
-        case "editorWorkerService":
-            return new EditorWorker();
-        case "javascript":
-        case "typescript":
-            return new JsWorker();
-        default:
-            throw new Error(`Unknown workerId: ${workerId}`);
-    }
-};
-
-self.MonacoEnvironment = {
-    getWorker
 };
 
 const getIconName = (key: string, lang: LanguageDisplayInfo) => lang.deviconIcon ?? key;
@@ -64,14 +31,32 @@ export default (
     resetButton: HTMLButtonElement,
     mostRecentCode: [string, string] | null
 ) => {
-    let editor: monaco.editor.IStandaloneCodeEditor | null = null;
+    let editor: EditorView | null = null;
     let currentLanguage = defaultLanguage;
+
+    const languageCompartment = new Compartment();
+
+    const setLanguage = (lang: LanguageDisplayInfo) => {
+        if (editor) {
+            editor.dispatch({
+                effects: languageCompartment.reconfigure(editorLanguages[lang.monacoContribution]())
+            });
+        }
+    };
 
     const setLanguageIcon = (name: string) => {
         const currentClass = languageIcon.className
             .split(" ")
             .filter((c) => !c.startsWith("devicon-"));
         languageIcon.className = [...currentClass, makeIconClass(name)].join(" ");
+    };
+
+    const setEditorContent = (content: string) => {
+        if (editor) {
+            editor.dispatch({
+                changes: { from: 0, to: editor.state.doc.length, insert: content }
+            });
+        }
     };
 
     languageDropdown.onchange = (e) => {
@@ -86,8 +71,8 @@ export default (
                         `contest-${contestId}-problem-${problemId}-${lang}-code`
                     ) ?? "null"
                 );
-                editor.setValue(storedCode ?? langInfo.defaultCode);
-                monaco.editor.setModelLanguage(editor.getModel()!, langInfo.monacoContribution);
+                setEditorContent(storedCode ?? langInfo.defaultCode);
+                setLanguage(langInfo);
                 window.localStorage.setItem(
                     `contest-${contestId}-problem-${problemId}-code`,
                     JSON.stringify([storedCode, lang])
@@ -113,39 +98,9 @@ export default (
     setLanguageIcon(getIconName(currentLanguage, langInfo));
     setTimeout(() => languageIcon.classList.remove("opacity-0"), 300);
 
-    const mql = matchMedia("(prefers-color-scheme: dark)");
-
-    const themeVariant = colorScheme === "system" ? (mql.matches ? "dark" : "light") : colorScheme;
-
-    if (colorScheme === "system") {
-        mql.addEventListener("change", (mql) => {
-            if (editor) {
-                monaco.editor.setTheme(mql.matches ? "wcpc-dark" : "wcpc-light");
-            }
-        });
-    }
-
-    editor = monaco.editor.create(editorElem as HTMLElement, {
-        value: storedCode ?? mostRecentCode?.[0] ?? langInfo.defaultCode,
-        theme: `wcpc-${themeVariant}`,
-        language: langInfo.monacoContribution,
-        automaticLayout: true,
-        minimap: { enabled: false }
-    });
-
-    if (window.stylesClone) {
-        const newStyles = window.stylesClone.cloneNode(true) as HTMLStyleElement;
-        document.head.appendChild(newStyles);
-    } else {
-        window.stylesClone = document.head.querySelector(".monaco-colors") as HTMLStyleElement;
-    }
-
-    let currentTimeout: number | undefined = undefined;
-    let oldLang = currentLanguage;
-
     const saveChanges = () => {
         if (!editor) return;
-        const text = editor.getValue();
+        const text = editor.state.doc.toString();
         window.localStorage.setItem(
             `contest-${contestId}-problem-${problemId}-code`,
             JSON.stringify([text, currentLanguage])
@@ -158,7 +113,7 @@ export default (
         saveIndicator.ariaLabel = "Changes Saved!";
     };
 
-    editor!.onDidChangeModelContent(() => {
+    const onDocChanged = () => {
         saveIndicator.dataset.saveState = "saving";
         saveIndicator.ariaLabel = "Saving Changes...";
         if (currentTimeout) {
@@ -170,7 +125,35 @@ export default (
             }
         }, 1000) as unknown as number;
         oldLang = currentLanguage!;
+    };
+
+    const theme = EditorView.theme({
+        "&": { height: "100%", width: "100%", overflow: "auto" }
     });
+
+    const state = EditorState.create({
+        extensions: [
+            baseExt,
+            editorHighlightTheme,
+            theme,
+            EditorView.updateListener.of((update) => {
+                if (!update.docChanged) return;
+                onDocChanged();
+            }),
+            languageCompartment.of(editorLanguages[langInfo.monacoContribution]())
+        ],
+        doc: storedCode ?? mostRecentCode?.[0] ?? langInfo.defaultCode
+    });
+
+    editor = new EditorView({
+        state,
+        parent: editorElem
+    });
+
+    editor;
+
+    let currentTimeout: number | undefined = undefined;
+    let oldLang = currentLanguage;
 
     document.addEventListener("astro:before-preparation", () => {
         if (editor && saveIndicator && saveIndicator.dataset.saveState === "saving") {
@@ -194,7 +177,7 @@ export default (
         }
     };
 
-    console.debug("Instantiated Monaco editor");
+    console.debug("Instantiated Editor");
 
     resetButton.onclick = () => {
         if (editor) {
@@ -203,7 +186,7 @@ export default (
                     "Are you sure you want to reset your code? This will erase your changes for the current language."
                 )
             ) {
-                editor.setValue(codeInfo[currentLanguage].defaultCode);
+                setEditorContent(codeInfo[currentLanguage].defaultCode);
             }
         }
     };

@@ -11,9 +11,9 @@ const GH_AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/";
 #[serde(rename_all = "camelCase")]
 struct SRIHashes {
     inline_script_hashes: Vec<String>,
-    //inline_style_hashes: Vec<String>,
+    // inline_style_hashes: Vec<String>,
     ext_script_hashes: Vec<String>,
-    //ext_style_hashes: Vec<String>,
+    // ext_style_hashes: Vec<String>,
 }
 
 fn join_hashes(hashes: &[String]) -> String {
@@ -32,10 +32,11 @@ fn stage_inner(path: &Path) -> AdHoc {
         "object-src 'none'".to_string(),
         "worker-src 'self' blob:".to_string(),
         "frame-ancestors 'none'".to_string(),
-        // `unsafe-inline` is used for style-src because of Monaco needing it
-        // Theming also relies on this being set, if removed theming should be
-        // redone to add its hash to this list
-        format!("style-src 'self' 'unsafe-inline'"),
+        format!(
+            // FIXME: If we use a nonce and blah blah for CodeMirror, we can remove 'unsafe-inline'
+            // but for now I can't think of a nice way to do it, so we'll roll with it.
+            "style-src 'self' 'unsafe-inline'",
+        ),
         format!("font-src 'self' data:"),
         format!("img-src 'self' {GRAVATAR_URL} {GH_AVATAR_URL}"),
         format!(
