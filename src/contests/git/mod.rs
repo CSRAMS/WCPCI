@@ -61,7 +61,7 @@ pub async fn export_solutions(
     branding: &State<BrandingConfig>,
     repos_handle: RepoMapGuard<'_>,
 ) -> ResultResponse<Template> {
-    let (contest, _participant, can_edit) =
+    let (contest, can_edit) =
         Contest::get_or_404_assert_started(&mut db, contest_id, Some(user), admin).await?;
 
     let now = chrono::Utc::now().naive_utc();

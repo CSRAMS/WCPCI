@@ -4,7 +4,7 @@ use rocket_dyn_templates::Template;
 
 use crate::{
     auth::users::User,
-    contests::{Contest, Participant},
+    contests::{Contest, Judge},
     context_with_base,
     db::DbConnection,
     leaderboard::LeaderboardManagerHandle,
@@ -51,10 +51,14 @@ async fn profile(
         let stats = leaderboard.stats_of(user_id);
         let problems_total = Problem::list(&mut db, contest.id).await?.len();
         if let Some((solved, rank)) = stats {
-            let role = Participant::get(&mut db, contest.id, user_id)
+            let role = if Judge::for_contest(contest.id, user_id, &mut db)
                 .await?
-                .map(|p| if p.is_judge { "Judge" } else { "Participant" })
-                .unwrap_or("Participant");
+                .is_some()
+            {
+                "Judge"
+            } else {
+                "Participant"
+            };
             contest_entries.push(ProfileContestEntry {
                 id: contest.id,
                 name: contest.name,

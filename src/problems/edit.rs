@@ -29,8 +29,7 @@ pub async fn edit_problem_get(
     slug: &str,
     _token: &CsrfToken,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let problem = Problem::get_or_404(&mut db, contest_id, slug).await?;
     let test_cases = TestCase::get_for_problem(&mut db, problem.id).await?;
     let form_template = ProblemFormTemplate {

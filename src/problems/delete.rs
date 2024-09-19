@@ -25,8 +25,7 @@ pub async fn delete_problem_get(
     slug: &str,
     _token: &CsrfToken,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let problem = Problem::get_or_404(&mut db, contest_id, slug).await?;
     Ok(Template::render(
         "problems/delete",
@@ -44,8 +43,7 @@ pub async fn delete_problem_post(
     leaderboard_handle: &State<LeaderboardManagerHandle>,
     mut db: DbConnection,
 ) -> FormResponse {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let problem = Problem::get_or_404(&mut db, contest_id, slug).await?;
     problem.delete(&mut db).await?;
     let mut leaderboard_handle = leaderboard_handle.lock().await;

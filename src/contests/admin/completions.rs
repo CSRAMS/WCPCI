@@ -16,7 +16,7 @@ use crate::{
         csrf::{CsrfToken, VerifyCsrfToken},
         users::{Admin, User},
     },
-    contests::{Contest, Participant},
+    contests::{team::Team, Contest},
     context_with_base_authed,
     db::DbConnection,
     leaderboard::LeaderboardManagerHandle,
@@ -60,10 +60,10 @@ impl<'r> TemplatedForm for CompletionTemplateForm<'r> {
 }
 
 #[allow(clippy::too_many_arguments)]
-#[get("/contests/<contest_id>/admin/runs/problems/<problem_slug>/edit/<participant_id>")]
+#[get("/contests/<contest_id>/admin/runs/problems/<problem_slug>/edit/<team_id>")]
 pub async fn edit_completion(
     mut db: DbConnection,
-    participant_id: i64,
+    team_id: i64,
     contest_id: i64,
     problem_slug: &str,
     _token: &CsrfToken,
@@ -71,24 +71,19 @@ pub async fn edit_completion(
     user: &User,
     admin: Option<&Admin>,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let problem = Problem::get_or_404(&mut db, contest_id, problem_slug).await?;
 
-    let target_participant = Participant::by_id(&mut db, participant_id)
+    let target_team = Team::by_id(&mut db, team_id)
         .await
-        .context("Failed to get participant")?
-        .ok_or(Status::NotFound)?;
-    let target_user = User::get(&mut db, target_participant.user_id)
-        .await?
+        .context("Failed to get team")?
         .ok_or(Status::NotFound)?;
 
     let start_local = tz.timezone().from_utc_datetime(&contest.start_time);
     let start_local_html = datetime_to_html_time(&start_local);
 
     let completion =
-        ProblemCompletion::get_for_problem_and_participant(&mut db, problem.id, participant_id)
-            .await?;
+        ProblemCompletion::get_for_problem_and_team(&mut db, problem.id, team_id).await?;
     let form = CompletionTemplateForm {
         completion: completion.as_ref(),
         contest: &contest,
@@ -98,8 +93,7 @@ pub async fn edit_completion(
         user,
         contest,
         start_time_local: start_local_html,
-        target_participant,
-        target_user,
+        target_team,
         problem,
         form
     );
@@ -130,12 +124,12 @@ pub struct ProblemCompletionForm {
 
 #[allow(clippy::too_many_arguments)]
 #[post(
-    "/contests/<contest_id>/admin/runs/problems/<problem_slug>/edit/<participant_id>",
+    "/contests/<contest_id>/admin/runs/problems/<problem_slug>/edit/<team_id>",
     data = "<form>"
 )]
 pub async fn edit_completion_post(
     mut db: DbConnection,
-    participant_id: i64,
+    team_id: i64,
     contest_id: i64,
     problem_slug: &str,
     _token: &VerifyCsrfToken,
@@ -145,25 +139,22 @@ pub async fn edit_completion_post(
     user: &User,
     admin: Option<&Admin>,
 ) -> FormResponse {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let problem = Problem::get_or_404(&mut db, contest_id, problem_slug).await?;
-    let target_participant = Participant::by_id(&mut db, participant_id)
+    let target_team = Team::by_id(&mut db, team_id)
         .await
-        .context("Failed to get participant")?
+        .context("Failed to get team")?
         .ok_or(Status::NotFound)?;
-    let target_user = User::get_or_404(&mut db, target_participant.user_id).await?;
 
     let completion =
-        ProblemCompletion::get_for_problem_and_participant(&mut db, problem.id, participant_id)
-            .await?;
+        ProblemCompletion::get_for_problem_and_team(&mut db, problem.id, team_id).await?;
     if let Some(ref value) = form.value {
         let completed_at = value
             .completed_in
             .map(|c| contest.start_time + chrono::Duration::minutes(c));
         let number_wrong = value.number_wrong;
         let completion = ProblemCompletion {
-            participant_id,
+            team_id,
             problem_id: problem.id,
             completed_at,
             number_wrong,
@@ -190,9 +181,8 @@ pub async fn edit_completion_post(
     let form = FormTemplateObject::from_rocket_context(form_template, &form.context);
     let ctx = context_with_base_authed!(
         user,
-        target_participant,
+        target_team,
         start_time_local: start_local_html,
-        target_user,
         contest,
         problem,
         form

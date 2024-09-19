@@ -8,7 +8,7 @@ use rocket_db_pools::Pool;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use crate::contests::{Contest, Participant};
+use crate::contests::{Contest, Team};
 use crate::db::{DbPool, DbPoolConnection};
 use crate::error::prelude::*;
 use crate::leaderboard::LeaderboardManagerHandle;
@@ -226,25 +226,16 @@ impl RunManager {
         let success = judge_run.success();
         judge_run.write_to_db(conn).await?;
 
-        let participant = Participant::get(conn, contest_id, user_id).await?;
+        let team = Team::from_user_and_contest(conn, user_id, contest_id).await?.context(
+            "Couldn't find team for user in contest, did they leave right before this run finished?",
+        )?;
 
-        if participant.as_ref().map_or(true, |p| p.is_judge) || !contest.is_running() {
-            return Ok(());
-        }
-
-        let participant = participant.unwrap();
-
-        let mut completion =
-            ProblemCompletion::get_for_problem_and_participant(conn, problem_id, participant.p_id)
-                .await
-                .context("While getting problem completion")?
-                .unwrap_or_else(|| {
-                    ProblemCompletion::temp(
-                        participant.p_id,
-                        problem_id,
-                        Some(ran_at).filter(|_| success),
-                    )
-                });
+        let mut completion = ProblemCompletion::get_for_problem_and_team(conn, problem_id, team.id)
+            .await
+            .context("While getting problem completion")?
+            .unwrap_or_else(|| {
+                ProblemCompletion::temp(team.id, problem_id, Some(ran_at).filter(|_| success))
+            });
 
         if success && completion.completed_at.is_none() {
             completion.completed_at = Some(ran_at);

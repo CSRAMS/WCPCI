@@ -38,15 +38,30 @@ CREATE TABLE IF NOT EXISTS contest (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS participant (
-    p_id INTEGER PRIMARY KEY NOT NULL, -- sqlx is stupid
-    user_id INTEGER NOT NULL,
+CREATE TABLE IF NOT EXISTS judge (
+    id INTEGER PRIMARY KEY NOT NULL,
     contest_id INTEGER NOT NULL,
-    is_judge BOOLEAN NOT NULL,
-    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
+    FOREIGN KEY (contest_id) REFERENCES contest(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+    UNIQUE (contest_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS team (
+    id INTEGER PRIMARY KEY NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    contest_id INTEGER NOT NULL,
     FOREIGN KEY (contest_id) REFERENCES contest(id) ON DELETE CASCADE
-    UNIQUE (user_id, contest_id)
+);
+
+CREATE TABLE IF NOT EXISTS team_member (
+    id INTEGER PRIMARY KEY NOT NULL,
+    team_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    is_leader BOOLEAN NOT NULL,
+    FOREIGN KEY (team_id) REFERENCES team(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+    UNIQUE (team_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS problem (
@@ -90,10 +105,10 @@ CREATE TABLE IF NOT EXISTS judge_run (
 
 CREATE TABLE IF NOT EXISTS problem_completion (
     problem_id INTEGER NOT NULL,
-    participant_id INTEGER NOT NULL,
+    team_id INTEGER NOT NULL,
     completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     number_wrong INTEGER NOT NULL,
     FOREIGN KEY (problem_id) REFERENCES problem(id) ON DELETE CASCADE,
-    FOREIGN KEY (participant_id) REFERENCES participant(p_id) ON DELETE CASCADE,
-    UNIQUE (problem_id, participant_id)
+    FOREIGN KEY (team_id) REFERENCES team(id) ON DELETE CASCADE,
+    UNIQUE (problem_id, team_id)
 );

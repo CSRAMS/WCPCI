@@ -5,7 +5,7 @@ use rocket_dyn_templates::Template;
 
 use crate::{
     auth::users::{Admin, User},
-    contests::{Contest, Participant},
+    contests::{team::Team, Contest},
     context_with_base_authed,
     db::DbConnection,
     error::prelude::*,
@@ -36,8 +36,7 @@ pub async fn runs(
     admin: Option<&Admin>,
     manager_handle: &State<ManagerHandle>,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let manager = manager_handle.lock().await;
     let jobs = manager.all_active_jobs().await;
     drop(manager);
@@ -86,8 +85,7 @@ pub async fn cancel(
     admin: Option<&Admin>,
     manager_handle: &State<ManagerHandle>,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let problem = Problem::by_id(&mut db, contest_id, problem_id)
         .await?
         .ok_or(Status::NotFound)?;
@@ -131,96 +129,84 @@ pub async fn cancel_post(
     Ok(Message::success("Run Cancelled").to(&format!("/contests/{}/admin/runs", contest_id)))
 }
 
-#[derive(Serialize)]
-struct CompletionsRow {
-    user: User,
-    participant: Participant,
-    pub completion: ProblemCompletion,
-}
+// TODO: Implement for teams & specific members
+// #[derive(Serialize)]
+// struct CompletionsRow {
+//     team: Team,
+//     pub completion: ProblemCompletion,
+// }
 
-#[get("/contests/<contest_id>/admin/runs/problems/<problem_slug>")]
-pub async fn problem(
-    mut db: DbConnection,
-    user: &User,
-    contest_id: i64,
-    tz: ClientTimeZone,
-    problem_slug: &str,
-    admin: Option<&Admin>,
-) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
-    let problem = Problem::get_or_404(&mut db, contest_id, problem_slug).await?;
-    let mut rows = Vec::new();
-    let participants = Participant::list_not_judge(&mut db, contest_id).await?;
-    for p in participants {
-        let user = User::get(&mut db, p.user_id).await?.ok_or_else(|| {
-            anyhow!(
-                "User {} not found when looping through participants",
-                p.user_id
-            )
-        })?;
-        let completion =
-            ProblemCompletion::get_for_problem_and_participant(&mut db, problem.id, p.p_id)
-                .await?
-                .unwrap_or(ProblemCompletion {
-                    participant_id: p.p_id,
-                    problem_id: problem.id,
-                    completed_at: None,
-                    number_wrong: 0,
-                });
+// #[get("/contests/<contest_id>/admin/runs/problems/<problem_slug>")]
+// pub async fn problem(
+//     mut db: DbConnection,
+//     user: &User,
+//     contest_id: i64,
+//     tz: ClientTimeZone,
+//     problem_slug: &str,
+//     admin: Option<&Admin>,
+// ) -> ResultResponse<Template> {
+//     let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+//     let problem = Problem::get_or_404(&mut db, contest_id, problem_slug).await?;
+//     let mut rows = Vec::new();
+//     let teams = contest.list_teams(&mut db).await?;
+//     for t in teams {
+//         let completion =
+//             ProblemCompletion::get_for_problem_and_team(&mut db, problem.id, t.id)
+//                 .await?
+//                 .unwrap_or(ProblemCompletion {
+//                     team_id: t.id,
+//                     problem_id: problem.id,
+//                     completed_at: None,
+//                     number_wrong: 0,
+//                 });
+//         rows.push(CompletionsRow {
+//             team: t,
+//             completion,
+//         });
+//     }
 
-        rows.push(CompletionsRow {
-            user,
-            participant: p,
-            completion,
-        });
-    }
+//     let tz = tz.timezone();
+//     let formatted_times = rows
+//         .iter()
+//         .map(|r| {
+//             r.completion
+//                 .completed_at
+//                 .map(|c| format_datetime_human_readable(tz.from_utc_datetime(&c)))
+//                 .unwrap_or_else(|| "Not Completed".to_string())
+//         })
+//         .collect::<Vec<_>>();
 
-    let tz = tz.timezone();
-    let formatted_times = rows
-        .iter()
-        .map(|r| {
-            r.completion
-                .completed_at
-                .map(|c| format_datetime_human_readable(tz.from_utc_datetime(&c)))
-                .unwrap_or_else(|| "Not Completed".to_string())
-        })
-        .collect::<Vec<_>>();
+//     let ctx = context_with_base_authed!(user, rows, formatted_times, contest, problem);
+//     Ok(Template::render("contests/admin/runs_problem", ctx))
+// }
 
-    let ctx = context_with_base_authed!(user, rows, formatted_times, contest, problem);
-    Ok(Template::render("contests/admin/runs_problem", ctx))
-}
-
-#[get("/contests/<contest_id>/admin/runs/problems/<problem_slug>/view/<participant_id>")]
-pub async fn view_user_run(
-    mut db: DbConnection,
-    user: &User,
-    contest_id: i64,
-    participant_id: i64,
-    problem_slug: &str,
-    admin: Option<&Admin>,
-) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
-    let problem = Problem::get_or_404(&mut db, contest_id, problem_slug).await?;
-    let target_participant = Participant::by_id(&mut db, participant_id)
-        .await?
-        .ok_or(Status::NotFound)?;
-    let target_user = User::get(&mut db, target_participant.user_id)
-        .await?
-        .ok_or(Status::NotFound)?;
-    let most_recent = JudgeRun::get_latest(&mut db, target_participant.user_id, problem.id).await?;
-    let success_recent =
-        JudgeRun::get_latest_success(&mut db, target_participant.user_id, problem.id).await?;
-    Ok(Template::render(
-        "contests/admin/runs_view",
-        context_with_base_authed!(
-            user,
-            target_user,
-            contest,
-            problem,
-            most_recent,
-            success_recent
-        ),
-    ))
-}
+// #[get("/contests/<contest_id>/admin/runs/problems/<problem_slug>/view/<team_id>")]
+// pub async fn view_user_run(
+//     mut db: DbConnection,
+//     user: &User,
+//     contest_id: i64,
+//     team_id: i64,
+//     problem_slug: &str,
+//     admin: Option<&Admin>,
+// ) -> ResultResponse<Template> {
+//     let contest =
+//         Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+//     let problem = Problem::get_or_404(&mut db, contest_id, problem_slug).await?;
+//     let target_team = Team::by_id(&mut db, team_id)
+//         .await?
+//         .ok_or(Status::NotFound)?;
+//     let most_recent = JudgeRun::get_latest(&mut db, target_team.user_id, problem.id).await?;
+//     let success_recent =
+//         JudgeRun::get_latest_success(&mut db, target_team.user_id, problem.id).await?;
+//     Ok(Template::render(
+//         "contests/admin/runs_view",
+//         context_with_base_authed!(
+//             user,
+//             target_user,
+//             contest,
+//             problem,
+//             most_recent,
+//             success_recent
+//         ),
+//     ))
+// }

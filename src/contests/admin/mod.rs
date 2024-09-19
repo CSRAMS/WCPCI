@@ -21,8 +21,7 @@ async fn contest_admin(
     user: &User,
     admin: Option<&Admin>,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let ctx = context_with_base_authed!(user, contest);
     Ok(Template::render("contests/admin", ctx))
 }
@@ -34,13 +33,13 @@ pub fn stage() -> AdHoc {
             routes![
                 contest_admin,
                 participants::participants,
-                participants::kick_participant_get,
-                participants::kick_participant_post,
+                // participants::kick_participant_get,
+                // participants::kick_participant_post,
                 runs::runs,
                 runs::cancel,
                 runs::cancel_post,
-                runs::problem,
-                runs::view_user_run,
+                // runs::problem,
+                // runs::view_user_run,
                 completions::edit_completion,
                 completions::edit_completion_post,
             ],

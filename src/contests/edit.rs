@@ -22,7 +22,7 @@ use crate::{
 };
 use crate::{leaderboard::LeaderboardManagerHandle, FormResponse};
 
-use super::{Contest, ContestForm, ContestFormTemplate, Participant};
+use super::{Contest, ContestForm, ContestFormTemplate};
 
 #[get("/<id>/edit")]
 pub async fn edit_contest_get(

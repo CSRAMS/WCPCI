@@ -19,12 +19,14 @@ mod delete;
 mod edit;
 mod git;
 mod join;
+mod judge;
 mod list;
 mod new;
-mod participant;
+mod team;
 mod view;
 
-pub use participant::Participant;
+pub use judge::Judge;
+pub use team::{Team, TeamMember};
 
 #[derive(Serialize, Clone)]
 pub struct Contest {
@@ -77,9 +79,27 @@ impl Contest {
     }
 
     pub async fn list_user_in(db: &mut DbPoolConnection, user_id: i64) -> Result<Vec<Self>> {
-        sqlx::query_as!(Contest, "SELECT contest.* FROM contest JOIN participant ON contest.id = participant.contest_id WHERE participant.user_id = ?", user_id)
+        sqlx::query_as!(Contest, "SELECT contest.* FROM contest JOIN team ON contest.id = team.contest_id JOIN team_member ON team.id = team_member.id WHERE team_member.user_id = ?", user_id)
             .fetch_all(&mut **db)
             .await.context("Error fetching contests user is in")
+    }
+
+    pub async fn list_teams(&self, db: &mut DbPoolConnection) -> Result<Vec<team::Team>> {
+        sqlx::query_as!(
+            team::Team,
+            "SELECT * FROM team WHERE contest_id = ?",
+            self.id
+        )
+        .fetch_all(&mut **db)
+        .await
+        .context("Error fetching teams")
+    }
+
+    pub async fn list_judges(&self, db: &mut DbPoolConnection) -> Result<Vec<User>> {
+        sqlx::query_as!(User, "SELECT user.* FROM user JOIN judge ON user.id = judge.user_id WHERE judge.contest_id = ?", self.id)
+            .fetch_all(&mut **db)
+            .await
+            .context("Error fetching judges")
     }
 
     pub async fn get(db: &mut DbPoolConnection, id: i64) -> Result<Option<Self>> {
@@ -98,14 +118,13 @@ impl Contest {
         id: i64,
         user: &User,
         admin: Option<&Admin>,
-    ) -> ResultResponse<(Self, Option<Participant>)> {
+    ) -> ResultResponse<Self> {
         let contest = Self::get_or_404(db, id).await?;
-        let participant = Participant::get(db, id, user.id).await?;
-        let is_judge = participant.as_ref().map_or(false, |p| p.is_judge);
+        let is_judge = Judge::for_contest(id, user.id, db).await?.is_some();
         if !is_judge && admin.is_none() {
             Err(Status::Forbidden.into())
         } else {
-            Ok((contest, participant))
+            Ok(contest)
         }
     }
 
@@ -114,19 +133,19 @@ impl Contest {
         id: i64,
         user: Option<&User>,
         admin: Option<&Admin>,
-    ) -> ResultResponse<(Self, Option<Participant>, bool)> {
+    ) -> ResultResponse<(Self, bool)> {
         let contest = Self::get_or_404(db, id).await?;
-        let participant = if let Some(user) = user {
-            Participant::get(db, id, user.id).await?
+        let judge = if let Some(user) = user {
+            Judge::for_contest(id, user.id, db).await?
         } else {
             None
         };
-        let can_edit = admin.is_some() || participant.as_ref().map_or(false, |p| p.is_judge);
+        let can_edit = admin.is_some() || judge.is_some();
         let started = contest.has_started();
         if !started && !can_edit {
             Err(Status::Forbidden.into())
         } else {
-            Ok((contest, participant, admin.is_some()))
+            Ok((contest, admin.is_some()))
         }
     }
 

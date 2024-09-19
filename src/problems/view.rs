@@ -3,7 +3,7 @@ use rocket_dyn_templates::Template;
 
 use crate::{
     auth::users::{Admin, User},
-    contests::{Contest, Participant},
+    contests::{Contest, Judge, Team},
     context_with_base,
     db::DbConnection,
     error::prelude::*,
@@ -20,12 +20,12 @@ pub async fn list_problems_get(
     mut db: DbConnection,
 ) -> ResultResponse<Template> {
     let contest = Contest::get_or_404(&mut db, contest_id).await?;
-    let participant = if let Some(user) = user {
-        Participant::get(&mut db, contest_id, user.id).await?
+    let judge = if let Some(user) = user {
+        Judge::for_contest(contest_id, user.id, &mut db).await?
     } else {
         None
     };
-    let is_judge = participant.as_ref().map_or(false, |p| p.is_judge);
+    let is_judge = judge.is_some();
     let is_admin = admin.is_some();
     let can_see = is_admin || is_judge || contest.has_started();
     let problems = if can_see {
@@ -35,7 +35,7 @@ pub async fn list_problems_get(
     };
     Ok(Template::render(
         "problems",
-        context_with_base!(user, problems, is_admin, participant, started: can_see, contest, can_edit: is_judge || is_admin),
+        context_with_base!(user, problems, is_admin, started: can_see, contest, can_edit: is_judge || is_admin),
     ))
 }
 
@@ -48,13 +48,17 @@ pub async fn view_problem_get(
     contest_id: i64,
     slug: &str,
 ) -> ResultResponse<Template> {
-    let (contest, participant, can_edit) =
+    let (contest, can_edit) =
         Contest::get_or_404_assert_started(&mut db, contest_id, user, admin).await?;
     let problem = Problem::get_or_404(&mut db, contest_id, slug).await?;
+    let team = if let Some(user) = user {
+        Team::from_user_and_contest(&mut db, user.id, contest_id).await?
+    } else {
+        None
+    };
 
-    let completion = if let Some(ref participant) = participant {
-        ProblemCompletion::get_for_problem_and_participant(&mut db, problem.id, participant.p_id)
-            .await?
+    let completion = if let Some(ref team) = team {
+        ProblemCompletion::get_for_problem_and_team(&mut db, problem.id, team.id).await?
     } else {
         None
     };
@@ -103,7 +107,7 @@ pub async fn view_problem_get(
             languages,
             default_language,
             can_edit,
-            participating: participant.map_or(false, |p| !p.is_judge),
+            participating: team.is_some(),
         ),
     ))
 }

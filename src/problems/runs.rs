@@ -3,16 +3,16 @@ use chrono::TimeZone;
 use rocket::get;
 use rocket_dyn_templates::Template;
 
-use crate::auth::users::Admin;
-use crate::auth::users::User;
-use crate::contests::Contest;
-use crate::contests::Participant;
-use crate::context_with_base;
-use crate::db::{DbConnection, DbPoolConnection};
-use crate::error::prelude::*;
-use crate::run::JobState;
-use crate::times::format_datetime_human_readable;
-use crate::times::ClientTimeZone;
+use crate::contests::Judge;
+use crate::{
+    auth::users::{Admin, User},
+    contests::Contest,
+    context_with_base,
+    db::{DbConnection, DbPoolConnection},
+    error::prelude::*,
+    run::JobState,
+    times::{format_datetime_human_readable, ClientTimeZone},
+};
 
 use super::Problem;
 
@@ -189,12 +189,12 @@ pub async fn runs(
     } else {
         vec![]
     };
-    let participant = if let Some(user) = user {
-        Participant::get(&mut db, contest_id, user.id).await?
+    let judge = if let Some(user) = user {
+        Judge::for_contest(contest_id, user.id, &mut db).await?
     } else {
         None
     };
-    let can_edit = admin.is_some() || participant.map_or(false, |p| p.is_judge);
+    let can_edit = admin.is_some() || judge.is_some();
     let tz = tz.timezone();
     let formatted_times = runs
         .iter()

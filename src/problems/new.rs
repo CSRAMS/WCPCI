@@ -28,8 +28,7 @@ pub async fn new_problem_get(
     contest_id: i64,
     _token: &CsrfToken,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let form_template = ProblemFormTemplate {
         problem: None,
         test_cases: vec![],
@@ -51,8 +50,7 @@ pub async fn new_problem_post(
     leaderboard_handle: &State<LeaderboardManagerHandle>,
     mut db: DbConnection,
 ) -> FormResponse {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
 
     if let Some(ref value) = form.value {
         let problem = Problem::temp(contest_id, value);
