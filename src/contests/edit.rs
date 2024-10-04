@@ -22,7 +22,7 @@ use crate::{
 };
 use crate::{leaderboard::LeaderboardManagerHandle, FormResponse};
 
-use super::{Contest, ContestForm, ContestFormTemplate};
+use super::{Contest, ContestForm, ContestFormTemplate, Judge};
 
 #[get("/<id>/edit")]
 pub async fn edit_contest_get(
@@ -35,7 +35,7 @@ pub async fn edit_contest_get(
 ) -> ResultResponse<Template> {
     let contest = Contest::get_or_404(&mut db, id).await?;
     let all_users = User::list(&mut db).await?;
-    let judges = Participant::list_judge(&mut db, contest.id).await?;
+    let judges = Judge::all_for_contest(contest.id, &mut db).await?;
     let form_template = ContestFormTemplate {
         contest: Some(&contest),
         judges: &judges,
@@ -83,24 +83,20 @@ pub async fn edit_contest_post(
 
         contest.update(&mut db).await?;
 
-        let participants = Participant::list(&mut db, contest.id).await?;
+        let judges = Judge::all_for_contest(contest.id, &mut db).await?.into_iter().map(|u| u.id).collect::<HashSet<i64>>();
+        let users = User::list(&mut db).await?;
         let mut visited: HashSet<i64> = HashSet::new();
-        for (participant, _) in participants {
+        for user in users {
             // if participant is a judge and is not in the list of new judges, delete them
-            if participant.is_judge
-                && !(value
-                    .judges
-                    .get(&participant.user_id)
-                    .copied()
-                    .unwrap_or(false))
+            if judges.contains(&user.id) && !value.judges.contains_key(&user.id)
             {
-                visited.insert(participant.user_id);
-                Participant::remove(&mut db, contest.id, participant.user_id).await?;
+                visited.insert(user.id);
+                Judge::delete_for_user_and_contest(user.id, contest.id, &mut db).await?;
             }
         }
 
         for judge in value.judges.keys().filter(|k| !visited.contains(k)) {
-            Participant::create_or_make_judge(&mut db, contest.id, *judge).await?;
+            Judge::create(contest.id, *judge, &mut db).await?;
         }
 
         let mut leaderboard_manager = leaderboard_handle.lock().await;
@@ -115,7 +111,8 @@ pub async fn edit_contest_post(
         Ok(Message::success("Contest Updated").to(&format!("/contests/{id}")))
     } else {
         let all_users = User::list(&mut db).await?;
-        let judges = Participant::list_judge(&mut db, contest.id).await?;
+        let judges = Judge::all_for_contest(contest.id, &mut db).await?;
+        // TODO: Update Contest form template for new judge system
         let form_template = ContestFormTemplate {
             contest: None,
             judges: &judges,

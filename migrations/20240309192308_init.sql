@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS team (
     id INTEGER PRIMARY KEY NOT NULL,
     name VARCHAR(100) NOT NULL,
     contest_id INTEGER NOT NULL,
+    place INTEGER,
     FOREIGN KEY (contest_id) REFERENCES contest(id) ON DELETE CASCADE
 );
 

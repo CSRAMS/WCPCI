@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::NaiveDateTime;
 
 use crate::{
-    contests::{Contest, Participant},
+    contests::{Contest, Team},
     db::DbPoolConnection,
     error::prelude::*,
     problems::ProblemCompletion,
@@ -41,23 +41,22 @@ pub struct ParticipantScores {
     contest_penalty_minutes: i64,
     contest_end: NaiveDateTime,
     contest_freeze: i64,
-    pub participant_id: i64,
-    pub user_id: i64,
+    pub team_id: i64,
     pub scores: HashMap<i64, ScoreEntry>,
 }
 
 impl ParticipantScores {
     async fn get_scores(
         db: &mut DbPoolConnection,
-        id: i64,
+        team_id: i64,
         contest_start: NaiveDateTime,
         contest_penalty_minutes: i64,
         contest_end: NaiveDateTime,
         contest_freeze: i64,
     ) -> Result<HashMap<i64, ScoreEntry>> {
-        let completions = ProblemCompletion::get_for_participant(db, id)
+        let completions = ProblemCompletion::get_for_team(db, team_id)
             .await
-            .with_context(|| format!("Couldn't score for participant {id}"))?;
+            .with_context(|| format!("Couldn't score for participant {team_id}"))?;
         let now = chrono::Utc::now().naive_utc();
         let c = completions
             .into_iter()
@@ -83,7 +82,7 @@ impl ParticipantScores {
 
     pub async fn new(
         db: &mut DbPoolConnection,
-        participant: &Participant,
+        team: &Team,
         contest: &Contest,
     ) -> Result<Self> {
         Ok(Self {
@@ -91,11 +90,10 @@ impl ParticipantScores {
             contest_penalty_minutes: contest.penalty,
             contest_end: contest.end_time,
             contest_freeze: contest.freeze_time,
-            participant_id: participant.p_id,
-            user_id: participant.user_id,
+            team_id: team.id,
             scores: Self::get_scores(
                 db,
-                participant.p_id,
+                team.id,
                 contest.start_time,
                 contest.penalty,
                 contest.end_time,
@@ -106,7 +104,7 @@ impl ParticipantScores {
     }
 
     pub fn process_completion(&mut self, completion: &ProblemCompletion) {
-        if completion.participant_id == self.participant_id {
+        if completion.team_id == self.team_id {
             if let Some(entry) = self.scores.get_mut(&completion.problem_id) {
                 if completion.completed_at.is_some() {
                     *entry = ScoreEntry::from_completion(

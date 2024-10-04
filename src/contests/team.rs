@@ -1,10 +1,13 @@
+use sqlx::prelude::FromRow;
+
 use crate::{db::DbPoolConnection, error::prelude::*};
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, FromRow)]
 pub struct Team {
     pub id: i64,
     pub name: String,
     pub contest_id: i64,
+    pub place: Option<i64>,
 }
 
 #[derive(Serialize, Clone)]
@@ -21,6 +24,7 @@ impl Team {
             id: 0,
             name,
             contest_id,
+            place: None,
         }
     }
 
@@ -28,7 +32,7 @@ impl Team {
         sqlx::query_as!(
             Team,
             "
-            SELECT id, name, contest_id
+            SELECT *
             FROM team
             WHERE id = ?
             ",
@@ -55,12 +59,13 @@ impl Team {
         sqlx::query_as!(
             Team,
             "
-            INSERT INTO team (name, contest_id)
-            VALUES (?, ?)
-            RETURNING id, name, contest_id
+            INSERT INTO team (name, contest_id, place)
+            VALUES (?, ?, ?)
+            RETURNING id, name, contest_id, place
             ",
             self.name,
-            self.contest_id
+            self.contest_id,
+            self.place,
         )
         .fetch_one(&mut **db)
         .await
@@ -194,6 +199,13 @@ impl Team {
             }
         }
         Ok(())
+    }
+
+    pub async fn list(db: &mut DbPoolConnection, contest_id: i64) -> Result<Vec<Team>> {
+        sqlx::query_as!(Team, "SELECT * FROM team WHERE contest_id = ?", contest_id)
+            .fetch_all(&mut **db)
+            .await
+            .context("Failed to fetch all teams for contest")
     }
 
     pub async fn from_user_and_contest(

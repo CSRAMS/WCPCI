@@ -39,8 +39,7 @@ pub async fn problem_import(
     admin: Option<&Admin>,
     user: &User,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     let form = ProblemImportForm {
         data: String::new(),
     };
@@ -58,8 +57,7 @@ pub async fn problem_import_post(
     _token: &CsrfToken,
     mut form: Form<Contextual<'_, ProblemImportForm>>,
 ) -> ResultResponse<Template> {
-    let (contest, _) =
-        Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
+    let contest = Contest::get_or_404_assert_can_edit(&mut db, contest_id, user, admin).await?;
     if let Some(value) = form.value.clone() {
         match serde_json::from_str::<ProblemData>(value.data.as_str()) {
             Ok(problem_data) => {

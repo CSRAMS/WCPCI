@@ -2,12 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::NaiveDateTime;
 use log::error;
-use sqlx::{FromRow, Row};
+use sqlx::FromRow;
 use tokio::sync::Mutex;
 
 use crate::{
-    auth::users::User,
-    contests::{Contest, Participant},
+    contests::{Contest, Team},
     db::DbPoolConnection,
     error::prelude::*,
     problems::ProblemCompletion,
@@ -25,8 +24,7 @@ pub struct Leaderboard {
 
 #[derive(Serialize)]
 pub struct LeaderboardEntry {
-    pub user: User,
-    pub p_id: i64,
+    pub team: Team,
     pub scores: HashMap<String, ScoreEntry>,
 }
 
@@ -54,10 +52,10 @@ impl Leaderboard {
         self.contest.is_frozen()
     }
 
-    fn get_first_person_for_problem(scores: &[ParticipantScores], problem_id: i64) -> Option<i64> {
+    fn get_first_team_for_problem(scores: &[ParticipantScores], problem_id: i64) -> Option<i64> {
         scores
             .iter()
-            .filter_map(|s| Some((s.participant_id, s.scores.get(&problem_id)?)))
+            .filter_map(|s| Some((s.team_id, s.scores.get(&problem_id)?)))
             .min_by_key(|(_, s)| s.secs_taken)
             .map(|(i, _)| i)
     }
@@ -72,7 +70,7 @@ impl Leaderboard {
             .await?;
         Ok(problems
             .into_iter()
-            .map(|p| (p.id, Self::get_first_person_for_problem(scores, p.id)))
+            .map(|p| (p.id, Self::get_first_team_for_problem(scores, p.id)))
             .collect())
     }
 
@@ -80,7 +78,7 @@ impl Leaderboard {
         db: &mut DbPoolConnection,
         contest: &Contest,
     ) -> Result<Vec<ParticipantScores>> {
-        let participants = Participant::list_not_judge(db, contest.id)
+        let participants = Team::list(db, contest.id)
             .await
             .context("Failed to get participants for leaderboard")?;
         let mut scores = Vec::new();
@@ -100,6 +98,7 @@ impl Leaderboard {
         }
     }
 
+    // TODO: Rewrite for teams
     pub async fn full(&mut self, db: &mut DbPoolConnection) -> Result<Vec<LeaderboardEntry>> {
         let now = chrono::Utc::now().naive_utc();
         if self
@@ -115,20 +114,19 @@ impl Leaderboard {
             .scores
             .iter()
             .enumerate()
-            .map(|(i, s)| format!("WHEN {} THEN {}", s.participant_id, i))
+            .map(|(i, s)| format!("WHEN {} THEN {}", s.team_id, i))
             .collect::<Vec<_>>()
             .join(" ");
         let scores = self
             .scores
             .iter()
-            .map(|s| (s.user_id, s.scores.clone()))
+            .map(|s| (s.team_id, s.scores.clone()))
             .collect::<HashMap<_, _>>();
         let query = format!(
             "
-            SELECT user.*, participant.p_id FROM participant 
-            JOIN user ON participant.user_id = user.id 
-            WHERE contest_id = ? AND is_judge = false
-            ORDER BY CASE participant.p_id {} ELSE 0 END;
+            SELECT * FROM team 
+            WHERE contest_id = ?
+            ORDER BY CASE team.id {} ELSE 0 END;
         ",
             if cases.is_empty() {
                 "WHEN 0 THEN 0"
@@ -144,12 +142,10 @@ impl Leaderboard {
         let res = res
             .into_iter()
             .map(|row| {
-                let p_id = row.try_get::<i64, _>("p_id").unwrap();
-                let user = User::from_row(&row).unwrap();
-                let scores = scores.get(&user.id);
+                let team = Team::from_row(&row).context("Failed to get team from row").unwrap();
+                let scores = scores.get(&team.id);
                 LeaderboardEntry {
-                    user,
-                    p_id,
+                    team,
                     scores: scores.map_or(HashMap::new(), |s| {
                         s.clone()
                             .into_iter()
@@ -171,19 +167,19 @@ impl Leaderboard {
             .scores
             .iter()
             .enumerate()
-            .map(|(i, s)| (s.participant_id, i))
+            .map(|(i, s)| (s.team_id, i))
             .collect::<HashMap<_, _>>();
 
         if let Some(participant) = self
             .scores
             .iter_mut()
-            .find(|s| s.participant_id == completion.participant_id)
+            .find(|s| s.team_id == completion.team_id)
         {
             participant.process_completion(completion);
             self.scores.sort();
             if completion.completed_at.is_some() {
                 self.send_msg(LeaderboardUpdateMessage::Completion {
-                    participant_id: completion.participant_id,
+                    team_id: completion.team_id,
                     score: ScoreEntry::from_completion(
                         completion,
                         self.contest.start_time,
@@ -192,7 +188,7 @@ impl Leaderboard {
                 });
             } else {
                 self.send_msg(LeaderboardUpdateMessage::UnComplete {
-                    participant_id: completion.participant_id,
+                    team_id: completion.team_id,
                     problem_id: completion.problem_id,
                 });
             }
@@ -203,19 +199,19 @@ impl Leaderboard {
             .get(&completion.problem_id)
             .copied()
             .flatten();
-        let new_first = Self::get_first_person_for_problem(&self.scores, completion.problem_id);
+        let new_first = Self::get_first_team_for_problem(&self.scores, completion.problem_id);
         self.first_map.insert(completion.problem_id, new_first);
         if new_first != current_first {
             if let Some(new_first) = new_first {
                 self.send_msg(LeaderboardUpdateMessage::CompletedFirst {
-                    participant_id: new_first,
+                    team_id: new_first,
                     problem_id: completion.problem_id,
                     is_first: true,
                 });
             }
             if let Some(current_first) = current_first {
                 self.send_msg(LeaderboardUpdateMessage::CompletedFirst {
-                    participant_id: current_first,
+                    team_id: current_first,
                     problem_id: completion.problem_id,
                     is_first: false,
                 });
@@ -226,7 +222,7 @@ impl Leaderboard {
             .scores
             .iter()
             .enumerate()
-            .map(|(i, s)| (s.participant_id, i))
+            .map(|(i, s)| (s.team_id, i))
             .collect::<HashMap<_, _>>();
 
         let participant_map = original_order
@@ -237,19 +233,14 @@ impl Leaderboard {
         self.send_msg(LeaderboardUpdateMessage::ReOrder { participant_map });
     }
 
-    pub fn remove_user(&mut self, user_id: i64) {
-        self.scores.retain(|s| s.user_id != user_id);
+    pub fn remove_team(&mut self, team_id: i64) {
+        self.scores.retain(|s| s.team_id != team_id);
         self.send_msg(LeaderboardUpdateMessage::FullRefresh);
     }
 
-    pub fn remove_participant(&mut self, participant_id: i64) {
-        self.scores.retain(|s| s.participant_id != participant_id);
-        self.send_msg(LeaderboardUpdateMessage::FullRefresh);
-    }
-
-    pub fn stats_of(&self, user_id: i64) -> Option<(usize, usize)> {
+    pub fn stats_of_team(&self, team_id: i64) -> Option<(usize, usize)> {
         self.scores.iter().enumerate().find_map(|(i, s)| {
-            if s.user_id == user_id {
+            if s.team_id == team_id {
                 Some((s.scores.len(), i + 1))
             } else {
                 None
@@ -278,17 +269,17 @@ pub enum LeaderboardUpdateMessage {
     FullRefresh,
     #[serde(rename_all = "camelCase")]
     UnComplete {
-        participant_id: i64,
+        team_id: i64,
         problem_id: i64,
     },
     #[serde(rename_all = "camelCase")]
     Completion {
-        participant_id: i64,
+        team_id: i64,
         score: ScoreEntry,
     },
     #[serde(rename_all = "camelCase")]
     CompletedFirst {
-        participant_id: i64,
+        team_id: i64,
         problem_id: i64,
         is_first: bool,
     },
@@ -348,17 +339,10 @@ impl LeaderboardManager {
         Ok(leaderboard.tx.subscribe())
     }
 
-    pub async fn delete_user(&mut self, user_id: i64) {
-        for (leaderboard, _) in self.leaderboards.values() {
-            let mut leaderboard = leaderboard.lock().await;
-            leaderboard.remove_user(user_id);
-        }
-    }
-
-    pub async fn delete_participant_for_contest(&mut self, participant_id: i64, contest_id: i64) {
+    pub async fn delete_team_for_contest(&mut self, team_id: i64, contest_id: i64) {
         if let Some((leaderboard, _)) = self.leaderboards.get_mut(&contest_id) {
             let mut leaderboard = leaderboard.lock().await;
-            leaderboard.remove_participant(participant_id);
+            leaderboard.remove_team(team_id);
         }
     }
 

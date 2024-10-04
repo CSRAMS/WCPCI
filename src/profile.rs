@@ -48,7 +48,7 @@ async fn profile(
         let leaderboard = leaderboards.get_leaderboard(&mut db, &contest).await?;
         drop(leaderboards);
         let leaderboard = leaderboard.lock().await;
-        let stats = leaderboard.stats_of(user_id);
+        let stats = leaderboard.stats_of_team(user_id);
         let problems_total = Problem::list(&mut db, contest.id).await?.len();
         if let Some((solved, rank)) = stats {
             let role = if Judge::for_contest(contest.id, user_id, &mut db)

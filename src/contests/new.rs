@@ -19,7 +19,7 @@ use crate::{
     FormResponse,
 };
 
-use super::{Contest, ContestFormTemplate, Participant};
+use super::{Contest, ContestFormTemplate, Judge};
 
 #[get("/new")]
 pub async fn new_contest_get(
@@ -81,7 +81,7 @@ pub async fn new_contest_post(
         );
         let contest = contest.insert(&mut db).await?;
         for judge in value.judges.keys() {
-            Participant::create_or_make_judge(&mut db, contest.id, *judge).await?;
+            Judge::create(contest.id, *judge, &mut db).await?;
         }
         Ok(Message::success("Contest Created").to(&format!("/contests/{}", contest.id)))
     } else {

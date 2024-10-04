@@ -11,7 +11,7 @@ use crate::{
     times::{datetime_to_html_time, format_datetime_human_readable, ClientTimeZone},
 };
 
-use super::{Contest, Participant};
+use super::{Contest, Judge, Team};
 
 #[get("/<contest_id>")]
 pub async fn view_contest(
@@ -22,18 +22,18 @@ pub async fn view_contest(
     admin: Option<&Admin>,
 ) -> ResultResponse<Template> {
     let contest = Contest::get_or_404(&mut db, contest_id).await?;
-    let participant = if let Some(user) = user {
-        Participant::get(&mut db, contest_id, user.id).await?
+    let team = if let Some(user) = user {
+        Team::from_user_and_contest(&mut db, user.id, contest_id).await?
     } else {
         None
     };
 
     let problems = Problem::list(&mut db, contest_id).await?;
 
-    let (participants, judges) = Participant::list(&mut db, contest_id)
-        .await?
-        .into_iter()
-        .partition::<Vec<_>, _>(|p| !p.0.is_judge);
+    let teams = Team::list(&mut db, contest_id).await?;
+    let judges = Judge::all_for_contest(contest_id, &mut db).await?;
+
+    let is_judge = user.map(|u| judges.iter().any(|j| j.id == u.id)).unwrap_or(false);
 
     let start_local = tz.timezone().from_utc_datetime(&contest.start_time);
     let start_local_html = datetime_to_html_time(&start_local);
@@ -43,12 +43,14 @@ pub async fn view_contest(
     let end_formatted = format_datetime_human_readable(end_local);
     let tz_name = tz.timezone().name();
 
-    let can_edit = admin.is_some() || participant.as_ref().map_or(false, |p| p.is_judge);
+    let can_edit = admin.is_some() || is_judge;
 
+    // TODO: contest template needs to be updated
     let ctx = context_with_base!(
         user,
         problems,
-        participants,
+        teams,
+        team,
         tz_name,
         can_edit,
         start_formatted,
@@ -59,7 +61,6 @@ pub async fn view_contest(
         started: contest.has_started(),
         ended: contest.has_ended(),
         contest,
-        participant
     );
     Ok(Template::render("contests/view", ctx))
 }

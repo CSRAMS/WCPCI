@@ -34,6 +34,7 @@ pub async fn delete_user_get(
     Ok(Template::render("admin/delete_user", ctx))
 }
 
+// TODO: Redo for removing teams and user etc...
 #[post("/users/<id>/delete")]
 pub async fn delete_user_post(
     id: i64,
@@ -47,7 +48,7 @@ pub async fn delete_user_post(
         error!("Failed to delete user: {:?}", e);
         Status::InternalServerError
     })?;
-    let mut leaderboard_manager = leaderboards.lock().await;
-    leaderboard_manager.delete_user(id).await;
+    // let mut leaderboard_manager = leaderboards.lock().await;
+    // leaderboard_manager.delete_user(id).await;
     Ok(Message::success("User deleted").to("/admin/users"))
 }

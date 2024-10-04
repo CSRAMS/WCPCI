@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     auth::users::{Admin, User},
-    contests::{Contest, Participant},
+    contests::{Contest, Judge},
     context_with_base,
     db::DbConnection,
     error::prelude::*,
@@ -57,9 +57,7 @@ async fn leaderboard_get(
     .context("Failed to fetch problems")?;
 
     let is_judge = if let Some(user) = user {
-        Participant::get(&mut db, contest_id, user.id)
-            .await?
-            .map_or(false, |p| p.is_judge)
+        Judge::is_judge(user.id, contest_id, &mut db).await?
     } else {
         false
     };
