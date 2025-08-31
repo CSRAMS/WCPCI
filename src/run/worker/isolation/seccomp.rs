@@ -149,9 +149,7 @@ pub fn compile_filter(config: &BpfConfig) -> Result<Vec<SockFilter>> {
 }
 
 pub fn install_filters(filters: &[SockFilter]) -> Result {
-    // TODO: Re-enable
     debug!("Applying seccomp filters");
-    Ok(())
-    // let bpf_filter = filters.iter().map(|s| s.clone().into()).collect::<Vec<_>>();
-    //seccompiler::apply_filter(&bpf_filter).context("Couldn't apply seccomp filter")
+    let bpf_filter = filters.iter().map(|s| s.clone().into()).collect::<Vec<_>>();
+    seccompiler::apply_filter(&bpf_filter).context("Couldn't apply seccomp filter")
 }
