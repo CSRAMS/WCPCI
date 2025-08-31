@@ -73,6 +73,8 @@ fn rocket() -> rocket::Rocket<Build> {
         .attach(profile::stage())
 }
 
+// It's the main function so I'm not really concerned with sizes
+#[allow(clippy::result_large_err)]
 #[rocket::main]
 async fn _main() -> Result<(), rocket::Error> {
     rocket().ignite().await?.launch().await?;

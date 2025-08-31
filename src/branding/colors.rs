@@ -78,7 +78,7 @@ fn lighten_or_darken(color: &Color, amount: f64) -> Color {
         color.lighten(offset)
     } else {
         // ^^ but for darkening
-        let offset = color.lightness() * (amount / 100.0 * -1.0);
+        let offset = color.lightness() * -(amount / 100.0);
         color.darken(offset)
     }
 }

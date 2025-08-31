@@ -228,7 +228,7 @@ impl RunManager {
 
         let participant = Participant::get(conn, contest_id, user_id).await?;
 
-        if participant.as_ref().map_or(true, |p| p.is_judge) || !contest.is_running() {
+        if participant.as_ref().is_none_or(|p| p.is_judge) || !contest.is_running() {
             return Ok(());
         }
 

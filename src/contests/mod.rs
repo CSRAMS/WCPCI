@@ -101,7 +101,7 @@ impl Contest {
     ) -> ResultResponse<(Self, Option<Participant>)> {
         let contest = Self::get_or_404(db, id).await?;
         let participant = Participant::get(db, id, user.id).await?;
-        let is_judge = participant.as_ref().map_or(false, |p| p.is_judge);
+        let is_judge = participant.as_ref().is_some_and(|p| p.is_judge);
         if !is_judge && admin.is_none() {
             Err(Status::Forbidden.into())
         } else {
@@ -121,7 +121,7 @@ impl Contest {
         } else {
             None
         };
-        let can_edit = admin.is_some() || participant.as_ref().map_or(false, |p| p.is_judge);
+        let can_edit = admin.is_some() || participant.as_ref().is_some_and(|p| p.is_judge);
         let started = contest.has_started();
         if !started && !can_edit {
             Err(Status::Forbidden.into())

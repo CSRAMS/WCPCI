@@ -34,13 +34,13 @@ impl Object {
 
     pub fn get_hash(&self) -> Vec<u8> {
         let mut hasher = Sha1::new();
-        hasher.update(&self.serialize());
+        hasher.update(self.serialize());
         hasher.finalize().to_vec()
     }
 
     pub fn get_hash_str(&self) -> String {
         let mut hasher = Sha1::new();
-        hasher.update(&self.serialize());
+        hasher.update(self.serialize());
         format!("{:x}", hasher.finalize())
     }
 

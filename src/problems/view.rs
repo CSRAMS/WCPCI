@@ -25,7 +25,7 @@ pub async fn list_problems_get(
     } else {
         None
     };
-    let is_judge = participant.as_ref().map_or(false, |p| p.is_judge);
+    let is_judge = participant.as_ref().is_some_and(|p| p.is_judge);
     let is_admin = admin.is_some();
     let can_see = is_admin || is_judge || contest.has_started();
     let problems = if can_see {
@@ -103,7 +103,7 @@ pub async fn view_problem_get(
             languages,
             default_language,
             can_edit,
-            participating: participant.map_or(false, |p| !p.is_judge),
+            participating: participant.is_some_and(|p| !p.is_judge),
         ),
     ))
 }

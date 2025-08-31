@@ -84,8 +84,8 @@ impl SubIdRange {
 
     pub fn get_random_id(&self) -> u32 {
         use rand::Rng;
-        let mut rng = rand::thread_rng();
-        rng.gen_range(self.0.clone())
+        let mut rng = rand::rng();
+        rng.random_range(self.0.clone())
     }
 
     pub fn assert_enough(self, count: usize) -> Result<Self> {

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use log::info;
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
+use rand::{distr::Alphanumeric, Rng};
 use rocket::{
     fairing::AdHoc,
     futures::lock::Mutex,
@@ -101,9 +101,9 @@ impl CsrfToken {
     pub const TOKEN_COOKIE_LIFETIME_MINUTES: i64 = 60;
 
     pub fn generate() -> Self {
+        let rng = rand::rng();
         Self(
-            OsRng
-                .sample_iter(&Alphanumeric)
+            rng.sample_iter(&Alphanumeric)
                 .take(Self::TOKEN_LENGTH)
                 .map(char::from)
                 .collect(),

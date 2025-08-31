@@ -94,7 +94,7 @@ impl TestCase {
             .with_context(|| format!("Failed to count test cases for problem {}", problem_id))
     }
 
-    pub fn to_form(&self) -> TestCaseForm {
+    pub fn to_form(&self) -> TestCaseForm<'_> {
         TestCaseForm {
             stdin: &self.stdin,
             expected_pattern: &self.expected_pattern,
@@ -122,7 +122,7 @@ impl TestCase {
     }
 }
 
-fn check_regex(pattern: &str, enabled: bool) -> Result<(), rocket::form::Errors> {
+fn check_regex(pattern: &'_ str, enabled: bool) -> Result<(), rocket::form::Errors<'_>> {
     if enabled {
         regex::Regex::new(pattern)
             .map(|_| ())

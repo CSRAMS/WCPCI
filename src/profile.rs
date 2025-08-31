@@ -37,7 +37,7 @@ async fn profile(
         .from_utc_datetime(&profile.created_at)
         .format("%B %-d, %Y")
         .to_string();
-    let is_me = user.map_or(false, |u| u.id == user_id);
+    let is_me = user.is_some_and(|u| u.id == user_id);
 
     let contests = Contest::list_user_in(&mut db, user_id).await?;
 

@@ -194,7 +194,7 @@ pub async fn runs(
     } else {
         None
     };
-    let can_edit = admin.is_some() || participant.map_or(false, |p| p.is_judge);
+    let can_edit = admin.is_some() || participant.is_some_and(|p| p.is_judge);
     let tz = tz.timezone();
     let formatted_times = runs
         .iter()

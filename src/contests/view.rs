@@ -43,7 +43,7 @@ pub async fn view_contest(
     let end_formatted = format_datetime_human_readable(end_local);
     let tz_name = tz.timezone().name();
 
-    let can_edit = admin.is_some() || participant.as_ref().map_or(false, |p| p.is_judge);
+    let can_edit = admin.is_some() || participant.as_ref().is_some_and(|p| p.is_judge);
 
     let ctx = context_with_base!(
         user,

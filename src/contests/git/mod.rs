@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::NaiveDateTime;
-use rand::distributions::Alphanumeric;
+use rand::distr::Alphanumeric;
 use rand::Rng;
 use repo::FakeRepo;
 use rocket::{fairing::AdHoc, http::Status, State};
@@ -42,7 +42,7 @@ fn run_to_object(run: &JudgeRun) -> Result<Object> {
 }
 
 fn gen_code() -> String {
-    rand::thread_rng()
+    rand::rng()
         .sample_iter(&Alphanumeric)
         .take(16)
         .map(char::from)
@@ -142,7 +142,7 @@ pub async fn export_solutions(
                     .run_config
                     .languages
                     .get(&run.language)
-                    .and_then(|l| l.runner.file_name.split('.').last())
+                    .and_then(|l| l.runner.file_name.split('.').next_back())
                     .unwrap_or("txt");
                 tree.add_entry(
                     BLOB_MODE.to_string(),
@@ -155,7 +155,7 @@ pub async fn export_solutions(
                     .run_config
                     .languages
                     .get(&run.language)
-                    .and_then(|l| l.runner.file_name.split('.').last())
+                    .and_then(|l| l.runner.file_name.split('.').next_back())
                     .unwrap_or("txt");
                 tree.add_entry(
                     BLOB_MODE.to_string(),

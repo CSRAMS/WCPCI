@@ -9,7 +9,7 @@ pub enum ResponseErr {
 
 #[derive(Responder)]
 pub enum FormResponseFailure {
-    Validation(Template),
+    Validation(Box<Template>),
     Error(ResponseErr),
 }
 
@@ -30,7 +30,7 @@ impl From<ResponseErr> for FormResponseFailure {
 
 impl From<Template> for FormResponseFailure {
     fn from(template: Template) -> Self {
-        FormResponseFailure::Validation(template)
+        FormResponseFailure::Validation(Box::new(template))
     }
 }
 

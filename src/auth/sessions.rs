@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
+use rand::{distr::Alphanumeric, Rng};
 
 use crate::{db::DbPoolConnection, error::prelude::*};
 
@@ -21,7 +21,7 @@ impl Session {
     const EXPIRY_DAYS: i64 = 14;
 
     fn gen_token() -> String {
-        OsRng
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .take(Self::TOKEN_LENGTH)
             .map(char::from)
