@@ -21,14 +21,14 @@ pub fn stage() -> AdHoc {
             .and_then(|s| s.as_str().map(|s| s.to_string()))
             .map(PathBuf::from);
         let rocket = if let Some(public_dir) = public_dir {
-            rocket.mount("/", FileServer::from(public_dir).rank(15))
+            rocket.mount("/", FileServer::new(public_dir).rank(15))
         } else {
             rocket
         };
 
         let cache_folders = ["/_astro/"].iter().map(|s| s.to_string()).collect();
         rocket
-            .mount("/_astro", FileServer::from(dir))
+            .mount("/_astro", FileServer::new(dir))
             .attach(CachedCompression::path_prefix_fairing(cache_folders))
     })
 }
