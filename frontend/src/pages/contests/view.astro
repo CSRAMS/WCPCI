@@ -4,7 +4,6 @@ import BreadCrumb from "@/components/BreadCrumb.astro";
 import Button from "@/components/Button.astro";
 import Form from "@/components/Form.astro";
 import Link from "@/components/Link.astro";
-import Progress from "@/components/Progress.astro";
 import Tile from "@/components/Tile.astro";
 import Title from "@/components/Title.astro";
 import ProblemsTable from "@/components/table/ProblemsTable.astro";
@@ -208,37 +207,35 @@ const description = `${variable("branding.name")} ${variable("contest.name")} ${
 <script>
     import { makeCountdown } from "@/lib/countdown";
 
-    document.addEventListener("astro:page-load", () => {
-        const startWord = document.getElementById("start-word") as HTMLElement | null;
-        const startTime = document.getElementById("start-time") as HTMLElement | null;
-        const countdown = document.getElementById("countdown") as HTMLElement | null;
-        const goButton = document.getElementById("go-to-problems") as HTMLAnchorElement | null;
-        const goButton2 = document.getElementById("go-to-leaderboard") as HTMLAnchorElement | null;
+    const startWord = document.getElementById("start-word") as HTMLElement | null;
+    const startTime = document.getElementById("start-time") as HTMLElement | null;
+    const countdown = document.getElementById("countdown") as HTMLElement | null;
+    const goButton = document.getElementById("go-to-problems") as HTMLAnchorElement | null;
+    const goButton2 = document.getElementById("go-to-leaderboard") as HTMLAnchorElement | null;
 
-        const toggleButtons = (hidden: boolean) => {
-            if (goButton && goButton2) {
-                if (hidden) {
-                    goButton.classList.add("hidden");
-                    goButton2.classList.add("hidden");
-                } else {
-                    goButton.classList.remove("hidden");
-                    goButton2.classList.remove("hidden");
-                }
+    const toggleButtons = (hidden: boolean) => {
+        if (goButton && goButton2) {
+            if (hidden) {
+                goButton.classList.add("hidden");
+                goButton2.classList.add("hidden");
+            } else {
+                goButton.classList.remove("hidden");
+                goButton2.classList.remove("hidden");
             }
+        }
+    };
+
+    if (startWord && startTime && countdown && goButton) {
+        const onEnd = () => {
+            countdown.classList.add("hidden");
+            toggleButtons(false);
         };
 
-        if (startWord && startTime && countdown && goButton) {
-            const onEnd = () => {
-                countdown.classList.add("hidden");
-                toggleButtons(false);
-            };
+        const onTick = (time: string) => {
+            countdown.innerText = `Contest starts in ${time}`;
+        };
 
-            const onTick = (time: string) => {
-                countdown.innerText = `Contest starts in ${time}`;
-            };
-
-            const start = new Date(startTime.dataset.timeStr as string);
-            makeCountdown(start, onTick, onEnd, onEnd);
-        }
-    });
+        const start = new Date(startTime.dataset.timeStr as string);
+        makeCountdown(start, onTick, onEnd, onEnd);
+    }
 </script>

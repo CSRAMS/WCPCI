@@ -155,13 +155,7 @@ export default (
     let currentTimeout: number | undefined = undefined;
     let oldLang = currentLanguage;
 
-    document.addEventListener("astro:before-preparation", () => {
-        if (editor && saveIndicator && saveIndicator.dataset.saveState === "saving") {
-            saveChanges();
-        }
-    });
-
-    window.onbeforeunload = (e) => {
+    window.onbeforeunload = () => {
         if (editor && saveIndicator && saveIndicator.dataset.saveState === "saving") {
             saveChanges();
         }
@@ -190,14 +184,6 @@ export default (
             }
         }
     };
-
-    document.addEventListener(
-        "astro:after-swap",
-        () => {
-            editor = null;
-        },
-        { once: true }
-    );
 
     return [editor, () => currentLanguage];
 };

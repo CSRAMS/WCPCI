@@ -6,8 +6,6 @@ import "@fontsource/roboto/900.css";
 import "@fontsource/roboto-mono";
 import "@/styles/style.scss";
 
-import { ViewTransitions } from "astro:transitions";
-
 import Variable from "@/components/tera/Variable.astro";
 import { variable } from "@/lib/tera";
 
@@ -29,8 +27,6 @@ const tagline = variable(taglineExpr);
 const metaTitle = title ? `${title} - ${siteTitle}` : `${siteTitle} - ${tagline}`;
 const description =
     descriptionOverride ?? variable(`branding.meta.description | default(value=${taglineExpr})`);
-
-const ogImage = variable("");
 ---
 
 <head>
@@ -74,7 +70,11 @@ const ogImage = variable("");
     <meta name="twitter:image:alt" content={variable("img.alt | default(value=branding.name)")} />
     <meta name="twitter:card" content="summary" />
     <Variable expression="get_color_css() | safe" />
-    <ViewTransitions />
+    <style is:global>
+        @view-transition {
+            navigation: auto;
+        }
+    </style>
     <slot />
 </head>
 
@@ -85,31 +85,29 @@ const ogImage = variable("");
 </style>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        const alert = document.getElementById("alert")! as HTMLElement;
-        const alertText = document.getElementById("alert-text")! as HTMLElement;
-        const alertClose = document.getElementById("alert-close")! as HTMLButtonElement;
+    const alert = document.getElementById("alert")! as HTMLElement;
+    const alertText = document.getElementById("alert-text")! as HTMLElement;
+    const alertClose = document.getElementById("alert-close")! as HTMLButtonElement;
 
-        alertClose.addEventListener("click", () => {
-            alert.dataset.show = "false";
-        });
-
-        const params = new URLSearchParams(window.location.search);
-        const alertMessage = params.get("msg");
-        const alertType = params.get("msg_type");
-        if (alertMessage && alertType) {
-            alertText.innerText = alertMessage;
-            alert.dataset.type = alertType;
-            alert.dataset.show = "true";
-            params.delete("msg");
-            params.delete("msg_type");
-            const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
-            history.replaceState({}, document.title, newUrl);
-            setTimeout(() => {
-                alert.dataset.show = "false";
-            }, 6000);
-        }
+    alertClose.addEventListener("click", () => {
+        alert.dataset.show = "false";
     });
+
+    const params = new URLSearchParams(window.location.search);
+    const alertMessage = params.get("msg");
+    const alertType = params.get("msg_type");
+    if (alertMessage && alertType) {
+        alertText.innerText = alertMessage;
+        alert.dataset.type = alertType;
+        alert.dataset.show = "true";
+        params.delete("msg");
+        params.delete("msg_type");
+        const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+        history.replaceState({}, document.title, newUrl);
+        setTimeout(() => {
+            alert.dataset.show = "false";
+        }, 6000);
+    }
 
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const secure = location.protocol === "https:" ? "; Secure" : ";";

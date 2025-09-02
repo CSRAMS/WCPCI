@@ -7,7 +7,6 @@ import Variable from "@/components/tera/Variable.astro";
 import ContestLayout from "@/layouts/ContestLayout.astro";
 import ProblemRun from "@/components/ProblemRun.astro";
 import { variable } from "@/lib/tera";
-import Button from "@/components/Button.astro";
 import Tile from "@/components/Tile.astro";
 import CopyButton from "@/components/CopyButton.astro";
 
@@ -71,20 +70,18 @@ const displayName = variable(
 </ContestLayout>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        document.querySelectorAll(".copy-button").forEach((button) => {
-            button.addEventListener("click", (e) => {
-                const target = e.target! as HTMLElement;
-                const button = target.closest(".copy-button")! as HTMLButtonElement;
-                const code = JSON.parse(button.dataset.program!);
-                navigator.clipboard.writeText(code);
-            });
+    document.querySelectorAll(".copy-button").forEach((button) => {
+        button.addEventListener("click", (e) => {
+            const target = e.target! as HTMLElement;
+            const button = target.closest(".copy-button")! as HTMLButtonElement;
+            const code = JSON.parse(button.dataset.program!);
+            navigator.clipboard.writeText(code);
         });
+    });
 
-        import("@/lib/highlighting").then((c) => {
-            console.debug("Setting Up Code Block Highlighting");
-            c.default();
-        });
+    import("@/lib/highlighting").then((c) => {
+        console.debug("Setting Up Code Block Highlighting");
+        c.default();
     });
 </script>
 

@@ -106,37 +106,35 @@ const wrapperIconClass = "flex flex-row";
 </Component>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        const forms = document.querySelectorAll("form");
+    const forms = document.querySelectorAll("form");
 
-        forms.forEach((form) => {
-            form.addEventListener(
-                "submit",
-                () => {
-                    const button = form.querySelector(".load-on-form-submit");
-                    if (button) {
-                        const icon = button.querySelector(`:scope .action-icon`);
-                        const loading = button.querySelector(`:scope .loading-icon`);
-                        const text = button.querySelector(`:scope .loc-text`);
+    forms.forEach((form) => {
+        form.addEventListener(
+            "submit",
+            () => {
+                const button = form.querySelector(".load-on-form-submit");
+                if (button) {
+                    const icon = button.querySelector(`:scope .action-icon`);
+                    const loading = button.querySelector(`:scope .loading-icon`);
+                    const text = button.querySelector(`:scope .loc-text`);
 
-                        setTimeout(() => button.setAttribute("disabled", "true"), 20);
+                    setTimeout(() => button.setAttribute("disabled", "true"), 20);
 
-                        if (text) {
-                            text.textContent =
-                                button.attributes.getNamedItem("data-loading-text")?.value ??
-                                "Loading...";
-                        }
-
-                        if (icon) {
-                            icon.classList.add("hidden");
-                        }
-                        if (loading) {
-                            loading.classList.remove("hidden");
-                        }
+                    if (text) {
+                        text.textContent =
+                            button.attributes.getNamedItem("data-loading-text")?.value ??
+                            "Loading...";
                     }
-                },
-                { once: true }
-            );
-        });
+
+                    if (icon) {
+                        icon.classList.add("hidden");
+                    }
+                    if (loading) {
+                        loading.classList.remove("hidden");
+                    }
+                }
+            },
+            { once: true }
+        );
     });
 </script>

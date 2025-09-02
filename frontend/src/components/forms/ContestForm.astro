@@ -144,50 +144,46 @@ import Button from "../Button.astro";
 </Form>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        const addJudgeSelect = document.getElementById("new-judge-input") as HTMLSelectElement;
-        const judgeList = document.getElementById("judge-list") as HTMLUListElement;
+    const addJudgeSelect = document.getElementById("new-judge-input") as HTMLSelectElement;
+    const judgeList = document.getElementById("judge-list") as HTMLUListElement;
 
-        if (!addJudgeSelect || !judgeList) return;
+    const removeJudgeCallback = (e: Event) => {
+        const target = e.target as HTMLButtonElement;
+        const judgeLi = target.closest("li") as HTMLLIElement;
+        judgeLi.remove();
+    };
 
-        const removeJudgeCallback = (e: Event) => {
-            const target = e.target as HTMLButtonElement;
-            const judgeLi = target.closest("li") as HTMLLIElement;
-            judgeLi.remove();
-        };
+    document.querySelectorAll(".remove-judge-button").forEach((button) => {
+        button.addEventListener("click", removeJudgeCallback);
+    });
 
-        document.querySelectorAll(".remove-judge-button").forEach((button) => {
-            button.addEventListener("click", removeJudgeCallback);
-        });
+    addJudgeSelect.value = "~~Add~~";
+
+    addJudgeSelect.onchange = () => {
+        const selectedOption = addJudgeSelect.options[addJudgeSelect.selectedIndex];
+        if (selectedOption.value === "~~Add~~") return;
 
         addJudgeSelect.value = "~~Add~~";
 
-        addJudgeSelect.onchange = () => {
-            const selectedOption = addJudgeSelect.options[addJudgeSelect.selectedIndex];
-            if (selectedOption.value === "~~Add~~") return;
-
+        if (document.getElementById(`judge-li-${selectedOption.value}`)) {
             addJudgeSelect.value = "~~Add~~";
+            return;
+        }
 
-            if (document.getElementById(`judge-li-${selectedOption.value}`)) {
-                addJudgeSelect.value = "~~Add~~";
-                return;
-            }
+        const judgeTemplate = document.getElementById("judge-template") as HTMLLIElement;
+        const newJudge = judgeTemplate.cloneNode(true) as HTMLLIElement;
+        const avatarImg = newJudge.querySelector("img") as HTMLImageElement;
 
-            const judgeTemplate = document.getElementById("judge-template") as HTMLLIElement;
-            const newJudge = judgeTemplate.cloneNode(true) as HTMLLIElement;
-            const avatarImg = newJudge.querySelector("img") as HTMLImageElement;
+        newJudge.id = `judge-li-${selectedOption.value}`;
+        avatarImg.src = selectedOption.dataset.avatarUrl!;
+        avatarImg.alt = selectedOption.dataset.name!;
+        newJudge.querySelector("span")!.textContent = selectedOption.dataset.name!;
+        newJudge.querySelector("button")!.addEventListener("click", removeJudgeCallback);
+        newJudge.querySelector("input")!.name = `judges[${selectedOption.value}]`;
 
-            newJudge.id = `judge-li-${selectedOption.value}`;
-            avatarImg.src = selectedOption.dataset.avatarUrl!;
-            avatarImg.alt = selectedOption.dataset.name!;
-            newJudge.querySelector("span")!.textContent = selectedOption.dataset.name!;
-            newJudge.querySelector("button")!.addEventListener("click", removeJudgeCallback);
-            newJudge.querySelector("input")!.name = `judges[${selectedOption.value}]`;
+        judgeList.appendChild(newJudge);
 
-            judgeList.appendChild(newJudge);
-
-            newJudge.classList.remove("hidden");
-            newJudge.classList.add("flex");
-        };
-    });
+        newJudge.classList.remove("hidden");
+        newJudge.classList.add("flex");
+    };
 </script>

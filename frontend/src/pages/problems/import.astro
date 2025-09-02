@@ -48,26 +48,24 @@ import { variable } from "@/lib/tera";
 </ContestLayout>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        const uploadButton = document.getElementById("upload-file")! as HTMLButtonElement;
-        const dataField = document.getElementById("data")! as HTMLTextAreaElement;
+    const uploadButton = document.getElementById("upload-file")! as HTMLButtonElement;
+    const dataField = document.getElementById("data")! as HTMLTextAreaElement;
 
-        uploadButton.onclick = () => {
-            const input = document.createElement("input");
-            input.type = "file";
-            input.accept = ".json";
-            input.onchange = () => {
-                const file = input.files?.[0];
-                if (!file) return;
+    uploadButton.onclick = () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".json";
+        input.onchange = () => {
+            const file = input.files?.[0];
+            if (!file) return;
 
-                const reader = new FileReader();
-                reader.onload = () => {
-                    const data = reader.result as string;
-                    dataField.value = data;
-                };
-                reader.readAsText(file);
+            const reader = new FileReader();
+            reader.onload = () => {
+                const data = reader.result as string;
+                dataField.value = data;
             };
-            input.click();
+            reader.readAsText(file);
         };
-    });
+        input.click();
+    };
 </script>

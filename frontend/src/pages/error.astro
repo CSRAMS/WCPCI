@@ -34,12 +34,10 @@ import Button from "@/components/Button.astro";
 </Layout>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        const backButton = document.getElementById("error-back-button");
-        if (backButton) {
-            backButton.addEventListener("click", () => {
-                window.history.back();
-            });
-        }
-    });
+    const backButton = document.getElementById("error-back-button");
+    if (backButton) {
+        backButton.addEventListener("click", () => {
+            window.history.back();
+        });
+    }
 </script>

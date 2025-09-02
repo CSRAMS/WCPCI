@@ -1,6 +1,5 @@
 ---
 import BreadCrumb from "@/components/BreadCrumb.astro";
-import Button from "@/components/Button.astro";
 import Collapse from "@/components/Collapse.astro";
 import CopyButton from "@/components/CopyButton.astro";
 import ProblemRun from "@/components/ProblemRun.astro";
@@ -70,11 +69,9 @@ const defaultCode = 'def main():\n\tprint("Hello World!")\n\nmain()';
 </ContestLayout>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        import("@/lib/highlighting").then((c) => {
-            console.debug("Setting Up Code Block Highlighting");
-            c.default();
-        });
+    import("@/lib/highlighting").then((c) => {
+        console.debug("Setting Up Code Block Highlighting");
+        c.default();
     });
 </script>
 

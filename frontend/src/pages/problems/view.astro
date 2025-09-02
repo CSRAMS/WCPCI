@@ -338,206 +338,169 @@ const path = `/contests/${variable("contest.id")}/problems/${variable("problem.s
     let editor: EditorView | null = null;
     let getLang: (() => string) | null = null;
 
-    document.addEventListener("astro:page-load", () => {
-        if (
-            import.meta.env.PROD &&
-            !window.location.pathname.match(/\/contests\/\d+\/problems\/.+\/?$/)
-        ) {
-            return;
-        }
+    const submitButton = document.querySelector("#submit") as HTMLButtonElement;
+    const codeInfoElem = document.querySelector("#code-info") as HTMLTextAreaElement;
+    const mostRecentCodeElem = document.querySelector("#most-recent-code") as HTMLTextAreaElement;
+    const editorElem = document.querySelector("#editor") as HTMLElement;
+    const runDebugButton = document.querySelector("#run-debug") as HTMLButtonElement;
+    const testInput = document.querySelector("#debug-input") as HTMLTextAreaElement;
+    const testOutput = document.querySelector("#debug-output") as HTMLTextAreaElement;
+    const debugCaseIndicator = document.querySelector("#test-indicator") as HTMLElement;
+    const runMessage = document.querySelector("#runs-msg") as HTMLElement;
+    const languageDropdown = document.querySelector("#language-dropdown") as HTMLSelectElement;
+    const languageIcon = document.querySelector("#language-icon") as HTMLSpanElement;
+    const runMessageWrapper = document.querySelector("#runs-msg-wrapper") as HTMLElement;
+    const testButtonTemplate = document.querySelector("#test-debug-template") as HTMLButtonElement;
+    const saveIndicator = document.querySelector("#save-indicator") as HTMLElement;
+    const resetButton = document.querySelector("#reset-button") as HTMLButtonElement;
+    const testSectionHeader = document.querySelector("#test-section-heading") as HTMLElement;
+    const descriptionSectionChevron = document.querySelector(
+        "#description-section-chevron"
+    ) as HTMLElement;
 
-        const submitButton = document.querySelector("#submit") as HTMLButtonElement;
-        const codeInfoElem = document.querySelector("#code-info") as HTMLTextAreaElement;
-        const mostRecentCodeElem = document.querySelector(
-            "#most-recent-code"
-        ) as HTMLTextAreaElement;
-        const editorElem = document.querySelector("#editor") as HTMLElement;
-        const runDebugButton = document.querySelector("#run-debug") as HTMLButtonElement;
-        const testInput = document.querySelector("#debug-input") as HTMLTextAreaElement;
-        const testOutput = document.querySelector("#debug-output") as HTMLTextAreaElement;
-        const debugCaseIndicator = document.querySelector("#test-indicator") as HTMLElement;
-        const runMessage = document.querySelector("#runs-msg") as HTMLElement;
-        const languageDropdown = document.querySelector("#language-dropdown") as HTMLSelectElement;
-        const languageIcon = document.querySelector("#language-icon") as HTMLSpanElement;
-        const runMessageWrapper = document.querySelector("#runs-msg-wrapper") as HTMLElement;
-        const testButtonTemplate = document.querySelector(
-            "#test-debug-template"
-        ) as HTMLButtonElement;
-        const saveIndicator = document.querySelector("#save-indicator") as HTMLElement;
-        const resetButton = document.querySelector("#reset-button") as HTMLButtonElement;
-        const testSectionHeader = document.querySelector("#test-section-heading") as HTMLElement;
-        const descriptionSectionChevron = document.querySelector(
-            "#description-section-chevron"
-        ) as HTMLElement;
+    const toggleButtons = (disabled: boolean) => {
+        submitButton.disabled = disabled;
+        runDebugButton.disabled = disabled;
+        document.querySelectorAll(".example-button").forEach((b) => {
+            (b as HTMLButtonElement).disabled = disabled;
+        });
+    };
 
-        if (!submitButton || !codeInfoElem || !editorElem || !runDebugButton) {
-            return;
-        }
+    const contestId = submitButton.dataset.contestId!;
+    const problemId = submitButton.dataset.problemId!;
+    //const problemSlug = submitButton.dataset.problemSlug!;
+    const defaultLanguage = submitButton.dataset.defaultLanguage!;
+    const colorScheme = submitButton.dataset.colorPreference!;
+    const loggedIn = submitButton.dataset.loggedIn === "true";
 
-        const toggleButtons = (disabled: boolean) => {
-            submitButton.disabled = disabled;
-            runDebugButton.disabled = disabled;
-            document.querySelectorAll(".example-button").forEach((b) => {
-                (b as HTMLButtonElement).disabled = disabled;
-            });
-        };
+    testSectionHeader.onclick = () => {
+        const expanded = testSectionHeader.dataset.expanded === "true";
+        testSectionHeader.dataset.expanded = expanded ? "false" : "true";
+        window.localStorage.setItem(
+            `testSectionExpanded-${contestId}-${problemId}`,
+            expanded ? "false" : "true"
+        );
+    };
 
-        const contestId = submitButton.dataset.contestId!;
-        const problemId = submitButton.dataset.problemId!;
-        //const problemSlug = submitButton.dataset.problemSlug!;
-        const defaultLanguage = submitButton.dataset.defaultLanguage!;
-        const colorScheme = submitButton.dataset.colorPreference!;
-        const loggedIn = submitButton.dataset.loggedIn === "true";
+    descriptionSectionChevron.onclick = () => {
+        const expanded = descriptionSectionChevron.dataset.expanded === "true";
+        descriptionSectionChevron.dataset.expanded = expanded ? "false" : "true";
+        window.localStorage.setItem(
+            `descriptionSectionExpanded-${contestId}-${problemId}`,
+            expanded ? "false" : "true"
+        );
+    };
 
-        testSectionHeader.onclick = () => {
-            const expanded = testSectionHeader.dataset.expanded === "true";
-            testSectionHeader.dataset.expanded = expanded ? "false" : "true";
-            window.localStorage.setItem(
-                `testSectionExpanded-${contestId}-${problemId}`,
-                expanded ? "false" : "true"
-            );
-        };
+    if (window.localStorage.getItem(`testSectionExpanded-${contestId}-${problemId}`) === "false") {
+        testSectionHeader.dataset.expanded = "false";
+    }
 
-        descriptionSectionChevron.onclick = () => {
-            const expanded = descriptionSectionChevron.dataset.expanded === "true";
-            descriptionSectionChevron.dataset.expanded = expanded ? "false" : "true";
-            window.localStorage.setItem(
-                `descriptionSectionExpanded-${contestId}-${problemId}`,
-                expanded ? "false" : "true"
-            );
-        };
+    if (
+        window.localStorage.getItem(`descriptionSectionExpanded-${contestId}-${problemId}`) ===
+        "false"
+    ) {
+        descriptionSectionChevron.dataset.expanded = "false";
+    }
 
-        if (
-            window.localStorage.getItem(`testSectionExpanded-${contestId}-${problemId}`) === "false"
-        ) {
-            testSectionHeader.dataset.expanded = "false";
-        }
+    const codeInfo = JSON.parse(codeInfoElem.value ?? "{}") as CodeInfo;
+    const mostRecentCode = JSON.parse(mostRecentCodeElem.value ?? "null") as
+        | [string, string]
+        | null;
 
-        if (
-            window.localStorage.getItem(`descriptionSectionExpanded-${contestId}-${problemId}`) ===
-            "false"
-        ) {
-            descriptionSectionChevron.dataset.expanded = "false";
-        }
-
-        const codeInfo = JSON.parse(codeInfoElem.value ?? "{}") as CodeInfo;
-        const mostRecentCode = JSON.parse(mostRecentCodeElem.value ?? "null") as
-            | [string, string]
-            | null;
-
-        if (loggedIn) {
-            import("@/lib/problem_ws").then((c) => {
-                console.debug("Preparing to connect to WebSocket");
-                ws = c.default(
-                    contestId,
-                    problemId,
-                    runMessageWrapper,
-                    runMessage,
-                    debugCaseIndicator,
-                    testOutput,
-                    toggleButtons
-                );
-            });
-        }
-
-        import("@/lib/editor").then((c) => {
-            console.debug("Creating Editor");
-            const [newEditor, _getLang] = c.default(
-                codeInfo,
-                defaultLanguage,
+    if (loggedIn) {
+        import("@/lib/problem_ws").then((c) => {
+            console.debug("Preparing to connect to WebSocket");
+            ws = c.default(
                 contestId,
                 problemId,
-                languageDropdown,
-                colorScheme,
-                editorElem,
-                languageIcon,
-                saveIndicator,
-                resetButton,
-                mostRecentCode
+                runMessageWrapper,
+                runMessage,
+                debugCaseIndicator,
+                testOutput,
+                toggleButtons
             );
-            editor = newEditor as EditorView;
-            getLang = _getLang as () => string;
         });
+    }
 
-        function trimByChar(string: string, character: string) {
-            const arr = Array.from(string);
-            const first = arr.findIndex((char) => char !== character);
-            const last = arr.reverse().findIndex((char) => char !== character);
-            return first === -1 && last === -1 ? "" : string.substring(first, string.length - last);
-        }
+    import("@/lib/editor").then((c) => {
+        console.debug("Creating Editor");
+        const [newEditor, _getLang] = c.default(
+            codeInfo,
+            defaultLanguage,
+            contestId,
+            problemId,
+            languageDropdown,
+            colorScheme,
+            editorElem,
+            languageIcon,
+            saveIndicator,
+            resetButton,
+            mostRecentCode
+        );
+        editor = newEditor as EditorView;
+        getLang = _getLang as () => string;
+    });
 
-        const trimLineEndings = (str: string) => trimByChar(trimByChar(str, "\n"), "\r");
+    function trimByChar(string: string, character: string) {
+        const arr = Array.from(string);
+        const first = arr.findIndex((char) => char !== character);
+        const last = arr.reverse().findIndex((char) => char !== character);
+        return first === -1 && last === -1 ? "" : string.substring(first, string.length - last);
+    }
 
-        import("@/lib/highlighting").then((c) => {
-            console.debug("Setting Up Code Block Highlighting");
-            c.default(
-                "#rendered-md",
-                (input) => {
-                    if (editor) {
-                        testInput.value = trimLineEndings(input);
-                        runDebugButton.click();
-                    }
-                    if (testSectionHeader) {
-                        testSectionHeader.dataset.expanded = "true";
-                    }
-                },
-                testButtonTemplate,
-                (input) => {
+    const trimLineEndings = (str: string) => trimByChar(trimByChar(str, "\n"), "\r");
+
+    import("@/lib/highlighting").then((c) => {
+        console.debug("Setting Up Code Block Highlighting");
+        c.default(
+            "#rendered-md",
+            (input) => {
+                if (editor) {
                     testInput.value = trimLineEndings(input);
+                    runDebugButton.click();
                 }
-            );
-        });
-
-        import("@/lib/math").then((c) => {
-            console.debug("Setting Up Math Block Highlighting");
-            c.default();
-        });
-
-        runDebugButton.onclick = () => {
-            if (editor && ws && getLang) {
-                const req: WebSocketRequest = {
-                    type: "test",
-                    input: testInput.value,
-                    language: getLang(),
-                    program: editor.state.doc.toString()
-                };
-                console.debug("Sending request", req);
-                ws.send(JSON.stringify(req));
-                toggleButtons(true);
+                if (testSectionHeader) {
+                    testSectionHeader.dataset.expanded = "true";
+                }
+            },
+            testButtonTemplate,
+            (input) => {
+                testInput.value = trimLineEndings(input);
             }
-        };
-
-        submitButton.onclick = () => {
-            if (editor && ws && getLang) {
-                const req: WebSocketRequest = {
-                    type: "judge",
-                    program: editor.state.doc.toString(),
-                    language: getLang()
-                };
-                console.debug("Sending request", req);
-                ws.send(JSON.stringify(req));
-                toggleButtons(true);
-            }
-        };
+        );
     });
 
-    document.addEventListener("astro:before-swap", () => {
-        confetti.reset();
+    import("@/lib/math").then((c) => {
+        console.debug("Setting Up Math Block Highlighting");
+        c.default();
     });
 
-    document.addEventListener("astro:after-swap", () => {
-        if (ws) {
-            ws.close();
-            ws = null;
+    runDebugButton.onclick = () => {
+        if (editor && ws && getLang) {
+            const req: WebSocketRequest = {
+                type: "test",
+                input: testInput.value,
+                language: getLang(),
+                program: editor.state.doc.toString()
+            };
+            console.debug("Sending request", req);
+            ws.send(JSON.stringify(req));
+            toggleButtons(true);
         }
-        if (editor) {
-            editor.destroy();
-            editor = null;
+    };
+
+    submitButton.onclick = () => {
+        if (editor && ws && getLang) {
+            const req: WebSocketRequest = {
+                type: "judge",
+                program: editor.state.doc.toString(),
+                language: getLang()
+            };
+            console.debug("Sending request", req);
+            ws.send(JSON.stringify(req));
+            toggleButtons(true);
         }
-        if (getLang) {
-            getLang = null;
-        }
-    });
+    };
 </script>
 
 <style is:global>

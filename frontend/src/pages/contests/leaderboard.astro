@@ -202,210 +202,190 @@ const description = `Leaderboard for ${variable("contest.name")} on ${variable("
     import confetti from "canvas-confetti";
     import type { Message, ScoreEntry } from "@/lib/leaderboard_ws";
 
-    let ws: WebSocket | null = null;
-
     const formatTimeTaken = (time: number) => {
         const hours = Math.floor(time / 60);
         const minutes = time % 60;
         return `${hours === 0 ? "" : `${hours}h `}${minutes.toString()}m`;
     };
 
-    document.addEventListener("astro:page-load", () => {
-        const dataElem = document.getElementById("dataElem")! as HTMLElement;
-        if (!dataElem) {
-            return;
-        }
-        const contestId = dataElem.getAttribute("data-contest-id")!;
-        const contestPenalty = parseInt(dataElem.getAttribute("data-contest-penalty")!);
-        const startTime = new Date(dataElem.getAttribute("data-contest-start-time")!);
-        const endTime = new Date(dataElem.getAttribute("data-contest-end-time")!);
-        const liveIndicator = document.getElementById("live-indicator");
-        const countdown = document.getElementById("countdown");
-        const countdownProgress = document.getElementById(
-            "countdown-progress"
-        ) as HTMLProgressElement | null;
+    const dataElem = document.getElementById("dataElem")! as HTMLElement;
+    const contestId = dataElem.getAttribute("data-contest-id")!;
+    const contestPenalty = parseInt(dataElem.getAttribute("data-contest-penalty")!);
+    const startTime = new Date(dataElem.getAttribute("data-contest-start-time")!);
+    const endTime = new Date(dataElem.getAttribute("data-contest-end-time")!);
+    const liveIndicator = document.getElementById("live-indicator");
+    const countdown = document.getElementById("countdown");
+    const countdownProgress = document.getElementById(
+        "countdown-progress"
+    ) as HTMLProgressElement | null;
 
-        if (countdown && countdownProgress) {
-            const frozenMessage = document.getElementById("frozen-msg") as HTMLElement;
-            const totalSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
-            const freezeTime = countdownProgress.dataset.frozenTime;
-            let frozen = countdownProgress.dataset.frozen === "true";
-            const onTick = (time: string, seconds: number) => {
-                if (countdown) {
-                    countdown.textContent = `Ends in ${time}`;
+    if (countdown && countdownProgress) {
+        const frozenMessage = document.getElementById("frozen-msg") as HTMLElement;
+        const totalSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
+        const freezeTime = countdownProgress.dataset.frozenTime;
+        let frozen = countdownProgress.dataset.frozen === "true";
+        const onTick = (time: string, seconds: number) => {
+            if (countdown) {
+                countdown.textContent = `Ends in ${time}`;
+            }
+            if (countdownProgress) {
+                countdownProgress.value = ((totalSeconds - seconds) / totalSeconds) * 100;
+            }
+            const minutesLeft = seconds / 60;
+            if (!frozen && minutesLeft < parseInt(freezeTime!)) {
+                frozen = true;
+                countdownProgress.dataset.frozen = "true";
+                if (frozenMessage) {
+                    frozenMessage.dataset.frozen = "true";
                 }
-                if (countdownProgress) {
-                    countdownProgress.value = ((totalSeconds - seconds) / totalSeconds) * 100;
-                }
-                const minutesLeft = seconds / 60;
-                if (!frozen && minutesLeft < parseInt(freezeTime!)) {
-                    frozen = true;
-                    countdownProgress.dataset.frozen = "true";
-                    if (frozenMessage) {
-                        frozenMessage.dataset.frozen = "true";
-                    }
-                }
-            };
-            const onEnd = () => {
-                const contestEndedMessage = encodeURIComponent("Contest Ended!");
-                window.location.href = `${window.location.href}?ended=true&msg=${contestEndedMessage}&msg_type=success`;
-            };
-            makeCountdown(endTime, onTick, onEnd);
-        }
-        if (window.location.search.includes("ended=true")) {
-            history.replaceState({}, document.title, window.location.pathname);
-            const options = {
-                particleCount: 2,
-                disableForReducedMotion: true,
-                spread: 55,
-                colors: ["#8f4999", "#ffe800"]
-            };
-            const end = Date.now() + 1000 * 10;
-            (function frame() {
-                confetti({
-                    ...options,
-                    angle: 60,
-                    origin: { x: 0 }
-                });
-                confetti({
-                    ...options,
-                    angle: 120,
-                    origin: { x: 1 }
-                });
-
-                if (Date.now() < end) {
-                    requestAnimationFrame(frame);
-                }
-            })();
-        }
-
-        const updateScore = (participantId: number, problemId: number, score: ScoreEntry) => {
-            const elem = document.getElementById(
-                `problem-completion-indication-${participantId}-${problemId}`
-            )!;
-            elem.setAttribute("data-status", "true");
-            const timeTakenElem = elem.querySelector(".time-taken")!;
-            const penaltyElem = elem.querySelector(".penalty")!;
-            timeTakenElem.textContent = formatTimeTaken(score.time_taken);
-            penaltyElem.textContent = `${score.num_wrong} (+${score.num_wrong * contestPenalty}m)`;
-        };
-
-        const unComplete = (participantId: number, problemId: number) => {
-            const elem = document.getElementById(
-                `problem-completion-indication-${participantId}-${problemId}`
-            )!;
-            elem.setAttribute("data-status", "false");
-            const timeTakenElem = elem.querySelector(".time-taken")!;
-            const penaltyElem = elem.querySelector(".penalty")!;
-            timeTakenElem.textContent = "--";
-            penaltyElem.textContent = "0 (+0m)";
-        };
-
-        const setFirst = (participantId: number, problemId: number, isFirst: boolean) => {
-            const elem = document.getElementById(
-                `problem-completion-indication-${participantId}-${problemId}`
-            )!;
-            elem.setAttribute("data-first", isFirst.toString());
-        };
-
-        const rePlace = (participantId: number, _oldPos: number, newPos: number) => {
-            const row = document.getElementById(`participant-row-${participantId}`);
-            if (row) {
-                const indicator = row.querySelector(".place-indicator")! as HTMLElement;
-                indicator.dataset.place = (newPos + 1).toString();
-                const text = indicator.querySelector(".place-text")!;
-                text.textContent = (newPos + 1).toString();
             }
         };
-
-        const transition = "transform 1s cubic-bezier(.35,-0.25,.3,1.1)";
-
-        const reOrder = (newOrder: number[]) => {
-            const table = document.getElementById("leaderboard")!.querySelector("tbody")!;
-            [...table.children]
-                .map((node, i) => [i, newOrder[i], node])
-                .sort(([__, a, _], [____, b, ___]) => (a as number) - (b as number))
-                .forEach(([oldPos, newPos, node]) => {
-                    table.appendChild(node as Node);
-                    const rowHeight = (node as Element).getBoundingClientRect().height;
-                    const multiplier = (oldPos as number) - (newPos as number);
-                    const transform = `translateY(${multiplier * rowHeight}px)`;
-                    [...(node as Element).children].forEach((child) => {
-                        let childElem = child as HTMLElement;
-                        childElem.style.transform = transform;
-                        childElem.style.transition = "";
-                    });
-                });
-            setTimeout(resetPositions, 0);
+        const onEnd = () => {
+            const contestEndedMessage = encodeURIComponent("Contest Ended!");
+            window.location.href = `${window.location.href}?ended=true&msg=${contestEndedMessage}&msg_type=success`;
         };
+        makeCountdown(endTime, onTick, onEnd);
+    }
+    if (window.location.search.includes("ended=true")) {
+        history.replaceState({}, document.title, window.location.pathname);
+        const options = {
+            particleCount: 2,
+            disableForReducedMotion: true,
+            spread: 55,
+            colors: ["#8f4999", "#ffe800"]
+        };
+        const end = Date.now() + 1000 * 10;
+        (function frame() {
+            confetti({
+                ...options,
+                angle: 60,
+                origin: { x: 0 }
+            });
+            confetti({
+                ...options,
+                angle: 120,
+                origin: { x: 1 }
+            });
 
-        const resetPositions = () => {
-            const table = document.getElementById("leaderboard")!.querySelector("tbody")!;
-            [...table.children].forEach((node, _) => {
-                [...node.children].forEach((child) => {
+            if (Date.now() < end) {
+                requestAnimationFrame(frame);
+            }
+        })();
+    }
+
+    const updateScore = (participantId: number, problemId: number, score: ScoreEntry) => {
+        const elem = document.getElementById(
+            `problem-completion-indication-${participantId}-${problemId}`
+        )!;
+        elem.setAttribute("data-status", "true");
+        const timeTakenElem = elem.querySelector(".time-taken")!;
+        const penaltyElem = elem.querySelector(".penalty")!;
+        timeTakenElem.textContent = formatTimeTaken(score.time_taken);
+        penaltyElem.textContent = `${score.num_wrong} (+${score.num_wrong * contestPenalty}m)`;
+    };
+
+    const unComplete = (participantId: number, problemId: number) => {
+        const elem = document.getElementById(
+            `problem-completion-indication-${participantId}-${problemId}`
+        )!;
+        elem.setAttribute("data-status", "false");
+        const timeTakenElem = elem.querySelector(".time-taken")!;
+        const penaltyElem = elem.querySelector(".penalty")!;
+        timeTakenElem.textContent = "--";
+        penaltyElem.textContent = "0 (+0m)";
+    };
+
+    const setFirst = (participantId: number, problemId: number, isFirst: boolean) => {
+        const elem = document.getElementById(
+            `problem-completion-indication-${participantId}-${problemId}`
+        )!;
+        elem.setAttribute("data-first", isFirst.toString());
+    };
+
+    const rePlace = (participantId: number, _oldPos: number, newPos: number) => {
+        const row = document.getElementById(`participant-row-${participantId}`);
+        if (row) {
+            const indicator = row.querySelector(".place-indicator")! as HTMLElement;
+            indicator.dataset.place = (newPos + 1).toString();
+            const text = indicator.querySelector(".place-text")!;
+            text.textContent = (newPos + 1).toString();
+        }
+    };
+
+    const transition = "transform 1s cubic-bezier(.35,-0.25,.3,1.1)";
+
+    const reOrder = (newOrder: number[]) => {
+        const table = document.getElementById("leaderboard")!.querySelector("tbody")!;
+        [...table.children]
+            .map((node, i) => [i, newOrder[i], node])
+            .sort(([__, a, _], [____, b, ___]) => (a as number) - (b as number))
+            .forEach(([oldPos, newPos, node]) => {
+                table.appendChild(node as Node);
+                const rowHeight = (node as Element).getBoundingClientRect().height;
+                const multiplier = (oldPos as number) - (newPos as number);
+                const transform = `translateY(${multiplier * rowHeight}px)`;
+                [...(node as Element).children].forEach((child) => {
                     let childElem = child as HTMLElement;
-                    childElem.style.transition = transition;
-                    childElem.style.transform = "";
+                    childElem.style.transform = transform;
+                    childElem.style.transition = "";
                 });
             });
-        };
+        setTimeout(resetPositions, 0);
+    };
 
-        const onMessage = (msg: Message) => {
-            console.debug("Received message", msg);
-            switch (msg.type) {
-                case "fullRefresh":
-                    window.location.reload();
-                    break;
-                case "completion":
-                    updateScore(msg.participantId, msg.score.id, msg.score);
-                    break;
-                case "unComplete":
-                    unComplete(msg.participantId, msg.problemId);
-                    break;
-                case "completedFirst":
-                    setFirst(msg.participantId, msg.problemId, msg.isFirst);
-                    break;
-                case "reOrder":
-                    Object.entries(msg.participantMap).forEach(
-                        ([participantId, [oldPos, newPos]]) => {
-                            rePlace(parseInt(participantId), oldPos, newPos);
-                        }
-                    );
-                    const newOrder = Object.values(msg.participantMap)
-                        .sort(([a, _], [b, __]) => {
-                            return a - b;
-                        })
-                        .map(([_, newN]) => newN);
-                    reOrder(newOrder);
-                    break;
-            }
-        };
-
-        const onOpen = () => {
-            if (liveIndicator) {
-                liveIndicator.dataset.live = "true";
-            }
-        };
-
-        const onClose = () => {
-            if (liveIndicator) {
-                liveIndicator.dataset.live = "false";
-            }
-        };
-
-        import("@/lib/leaderboard_ws").then((c) => {
-            ws = c.default(parseInt(contestId), onMessage, onClose, onOpen);
+    const resetPositions = () => {
+        const table = document.getElementById("leaderboard")!.querySelector("tbody")!;
+        [...table.children].forEach((node, _) => {
+            [...node.children].forEach((child) => {
+                let childElem = child as HTMLElement;
+                childElem.style.transition = transition;
+                childElem.style.transform = "";
+            });
         });
-    });
+    };
 
-    document.addEventListener("astro:before-swap", () => {
-        confetti.reset();
-    });
-
-    document.addEventListener("astro:after-swap", () => {
-        if (ws) {
-            ws.close();
-            ws = null;
+    const onMessage = (msg: Message) => {
+        console.debug("Received message", msg);
+        switch (msg.type) {
+            case "fullRefresh":
+                window.location.reload();
+                break;
+            case "completion":
+                updateScore(msg.participantId, msg.score.id, msg.score);
+                break;
+            case "unComplete":
+                unComplete(msg.participantId, msg.problemId);
+                break;
+            case "completedFirst":
+                setFirst(msg.participantId, msg.problemId, msg.isFirst);
+                break;
+            case "reOrder":
+                Object.entries(msg.participantMap).forEach(([participantId, [oldPos, newPos]]) => {
+                    rePlace(parseInt(participantId), oldPos, newPos);
+                });
+                const newOrder = Object.values(msg.participantMap)
+                    .sort(([a, _], [b, __]) => {
+                        return a - b;
+                    })
+                    .map(([_, newN]) => newN);
+                reOrder(newOrder);
+                break;
         }
+    };
+
+    const onOpen = () => {
+        if (liveIndicator) {
+            liveIndicator.dataset.live = "true";
+        }
+    };
+
+    const onClose = () => {
+        if (liveIndicator) {
+            liveIndicator.dataset.live = "false";
+        }
+    };
+
+    import("@/lib/leaderboard_ws").then((c) => {
+        c.default(parseInt(contestId), onMessage, onClose, onOpen);
     });
 </script>

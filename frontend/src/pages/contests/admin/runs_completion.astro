@@ -66,20 +66,14 @@ import { variable } from "@/lib/tera";
 </ContestLayout>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        const nowButton = document.getElementById("now-button");
-        const completedInField = document.getElementById("completed_in") as HTMLInputElement | null;
+    const nowButton = document.getElementById("now-button")!;
+    const completedInField = document.getElementById("completed_in") as HTMLInputElement;
 
-        if (!nowButton || !completedInField) {
-            return;
-        }
-
-        nowButton.addEventListener("click", () => {
-            const startTime = new Date(nowButton.dataset.contestStart!);
-            const now = new Date();
-            const diff = now.getTime() - startTime.getTime();
-            const diffMinutes = Math.floor(diff / 60000);
-            completedInField.value = diffMinutes.toString();
-        });
+    nowButton.addEventListener("click", () => {
+        const startTime = new Date(nowButton.dataset.contestStart!);
+        const now = new Date();
+        const diff = now.getTime() - startTime.getTime();
+        const diffMinutes = Math.floor(diff / 60000);
+        completedInField.value = diffMinutes.toString();
     });
 </script>

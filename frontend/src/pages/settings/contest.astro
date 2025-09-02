@@ -47,16 +47,13 @@ import { tag, variable } from "@/lib/tera";
         UseSystem: "system"
     } as Record<string, string>;
 
-    document.addEventListener("astro:page-load", () => {
-        const schemeSelector = document.querySelector("#color-scheme-select") as HTMLSelectElement;
-        if (!schemeSelector) return;
-        let oldVal = schemeSelector.value;
-        schemeSelector.onchange = (e) => {
-            const val = (e.target as HTMLSelectElement).value;
-            const root = document.documentElement;
-            root.classList.remove(valueToClassName[oldVal]!);
-            root.classList.add(valueToClassName[val]!);
-            oldVal = val;
-        };
-    });
+    const schemeSelector = document.querySelector("#color-scheme-select") as HTMLSelectElement;
+    let oldVal = schemeSelector.value;
+    schemeSelector.onchange = (e) => {
+        const val = (e.target as HTMLSelectElement).value;
+        const root = document.documentElement;
+        root.classList.remove(valueToClassName[oldVal]!);
+        root.classList.add(valueToClassName[val]!);
+        oldVal = val;
+    };
 </script>

@@ -7,7 +7,6 @@ import TestCaseForm from "./TestCaseForm.astro";
 import Button from "../Button.astro";
 import { variable } from "@/lib/tera";
 import Label from "../Label.astro";
-import Variable from "../tera/Variable.astro";
 import Link from "../Link.astro";
 
 export type Props = Omit<ComponentProps<typeof Form>, "slot">;
@@ -69,50 +68,44 @@ const { ...props } = Astro.props;
 </Form>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        const btn = document.querySelector("#add-test-case-button");
+    const btn = document.querySelector("#add-test-case-button")!;
 
-        if (!btn) {
-            return;
+    const addRemoveListener = (btn: Element) => {
+        btn.addEventListener(
+            "click",
+            (e) => {
+                const target = e.target as HTMLElement;
+                const form = target.closest(".test-case-form")!;
+                form.remove();
+            },
+            { once: true }
+        );
+    };
+
+    btn.addEventListener("click", () => {
+        const target = document.querySelector("#test-case-clone-target");
+        const highestNumber = Math.max(
+            0,
+            ...Array.from(target!.children).map((el) => parseInt(el.id.split("-").pop()!))
+        );
+        const form = document.querySelector("#test-case-form-template");
+        const clone = form!.cloneNode(true);
+        const cloneElem = clone as HTMLElement;
+        cloneElem.classList.remove("!hidden");
+        cloneElem.id = `test-case-form-${highestNumber + 1}`;
+        cloneElem.setAttribute("open", "true");
+        cloneElem.innerHTML = cloneElem.innerHTML.replaceAll(/##i##/g, `${highestNumber + 1}`);
+        addRemoveListener(cloneElem.querySelector(".remove-test-case-button")!);
+        target!.appendChild(clone);
+        for (const form of document.querySelectorAll(
+            `.test-case-form:not(#${cloneElem.id}):not(#test-case-form-template)`
+        )) {
+            form.removeAttribute("open");
         }
-
-        const addRemoveListener = (btn: Element) => {
-            btn.addEventListener(
-                "click",
-                (e) => {
-                    const target = e.target as HTMLElement;
-                    const form = target.closest(".test-case-form")!;
-                    form.remove();
-                },
-                { once: true }
-            );
-        };
-
-        btn.addEventListener("click", () => {
-            const target = document.querySelector("#test-case-clone-target");
-            const highestNumber = Math.max(
-                0,
-                ...Array.from(target!.children).map((el) => parseInt(el.id.split("-").pop()!))
-            );
-            const form = document.querySelector("#test-case-form-template");
-            const clone = form!.cloneNode(true);
-            const cloneElem = clone as HTMLElement;
-            cloneElem.classList.remove("!hidden");
-            cloneElem.id = `test-case-form-${highestNumber + 1}`;
-            cloneElem.setAttribute("open", "true");
-            cloneElem.innerHTML = cloneElem.innerHTML.replaceAll(/##i##/g, `${highestNumber + 1}`);
-            addRemoveListener(cloneElem.querySelector(".remove-test-case-button")!);
-            target!.appendChild(clone);
-            for (const form of document.querySelectorAll(
-                `.test-case-form:not(#${cloneElem.id}):not(#test-case-form-template)`
-            )) {
-                form.removeAttribute("open");
-            }
-            target!.scrollTop = target!.scrollHeight;
-        });
-
-        const removeButtons = document.querySelectorAll(".remove-test-case-button");
-
-        removeButtons.forEach(addRemoveListener);
+        target!.scrollTop = target!.scrollHeight;
     });
+
+    const removeButtons = document.querySelectorAll(".remove-test-case-button");
+
+    removeButtons.forEach(addRemoveListener);
 </script>

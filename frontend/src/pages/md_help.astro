@@ -69,15 +69,13 @@ import Layout from "@/layouts/Layout.astro";
 </style>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        import("@/lib/highlighting").then((c) => {
-            console.debug("Setting Up Code Block Highlighting");
-            c.default("main");
-        });
+    import("@/lib/highlighting").then((c) => {
+        console.debug("Setting Up Code Block Highlighting");
+        c.default("main");
+    });
 
-        import("@/lib/math").then((c) => {
-            console.debug("Setting Up Math Block Highlighting");
-            c.default("main");
-        });
+    import("@/lib/math").then((c) => {
+        console.debug("Setting Up Math Block Highlighting");
+        c.default("main");
     });
 </script>

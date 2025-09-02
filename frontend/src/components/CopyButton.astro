@@ -33,14 +33,12 @@ const copyData = copyText
 </Button>
 
 <script>
-    document.addEventListener("astro:page-load", () => {
-        document.querySelectorAll(".copy-button").forEach((button) => {
-            button.addEventListener("click", (e) => {
-                const target = e.target! as HTMLElement;
-                const button = target.closest(".copy-button")! as HTMLButtonElement;
-                const data = JSON.parse(button.dataset.copy!);
-                navigator.clipboard.writeText(data);
-            });
+    document.querySelectorAll(".copy-button").forEach((button) => {
+        button.addEventListener("click", (e) => {
+            const target = e.target! as HTMLElement;
+            const button = target.closest(".copy-button")! as HTMLButtonElement;
+            const data = JSON.parse(button.dataset.copy!);
+            navigator.clipboard.writeText(data);
         });
     });
 </script>
