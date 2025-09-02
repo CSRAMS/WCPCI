@@ -54,7 +54,9 @@ const {
     >
         <AlertBox />
         <Header navSpacerClass={navSpacerClass} noTemplate={noTemplate} urlSuffix={urlSuffix}>
-            <slot name="nav-left" />
+            <Fragment slot="nav-left">
+                <slot name="nav-left" />
+            </Fragment>
         </Header>
         <main
             id="main"
