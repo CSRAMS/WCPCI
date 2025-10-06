@@ -254,6 +254,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "backend"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz 0.10.4",
+ "color-art",
+ "dotenvy",
+ "flate2",
+ "image",
+ "log",
+ "markdown",
+ "nix",
+ "openssl",
+ "rand 0.9.2",
+ "regex",
+ "reqwest",
+ "rocket",
+ "rocket_async_compression",
+ "rocket_db_pools",
+ "rocket_dyn_templates",
+ "rocket_oauth2",
+ "rocket_ws",
+ "rustc_version_runtime",
+ "samael",
+ "seccompiler",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha256",
+ "slug",
+ "sqlx",
+ "tera",
+ "tokio",
+ "tokio-util",
+ "urlencoding",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4628,45 +4667,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a05d73b933a847d6cccdda8f838a22ff101ad9bf93e33684f39c1f5f0eece3d"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "wcpc"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "chrono-tz 0.10.4",
- "color-art",
- "dotenvy",
- "flate2",
- "image",
- "log",
- "markdown",
- "nix",
- "openssl",
- "rand 0.9.2",
- "regex",
- "reqwest",
- "rocket",
- "rocket_async_compression",
- "rocket_db_pools",
- "rocket_dyn_templates",
- "rocket_oauth2",
- "rocket_ws",
- "rustc_version_runtime",
- "samael",
- "seccompiler",
- "serde",
- "serde_json",
- "sha1",
- "sha256",
- "slug",
- "sqlx",
- "tera",
- "tokio",
- "tokio-util",
- "urlencoding",
 ]
 
 [[package]]

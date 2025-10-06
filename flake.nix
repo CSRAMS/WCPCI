@@ -1,102 +1,173 @@
 {
-  description = "Flake for wcpc web interface";
-
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable"; # TODO(Spoon): Do we want to track stable?
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    crane = {
-      url = "github:ipetkov/crane";
+    flakelight = {
+      url = "github:nix-community/flakelight";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Crane has no inputs
+    crane.url = "github:ipetkov/crane";
 
     advisory-db = {
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+
+    garnix-lib = {
+      url = "github:garnix-io/garnix-lib";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    crane,
-    advisory-db,
-  }: let
-    forAllSystems = nixpkgs.lib.genAttrs [
-      "aarch64-linux"
-      "aarch64-darwin"
-      "x86_64-darwin"
-      "x86_64-linux"
-    ];
-    pkgsFor = system: import nixpkgs {inherit system;};
+  outputs =
+    {
+      flakelight,
+      crane,
+      garnix-lib,
+      ...
+    }@inputs:
+    flakelight ./. {
+      inherit inputs;
+      nixDir = ./.;
+      nixDirAliases.packages = [ "pkgs" ];
+      systems = [ "x86_64-linux" ]; # TODO(Spoon): include darwin, aarch
+      withOverlays = [ (final: prev: { craneLib = crane.mkLib final; }) ];
 
-    gitRev = self.shortRev or self.dirtyShortRev or "";
-    rawVersion = (nixpkgs.lib.importTOML ./Cargo.toml).package.version;
-    version = rawVersion + "-" + gitRev;
-    packages = system: let
-      pkgs = pkgsFor system;
-    in rec {
-      backend = pkgs.callPackage ./nix/backend.nix {
-        inherit advisory-db version gitRev;
-        crane = crane.lib.${system};
+      lib =
+        { lib, ... }:
+        let
+          inherit (lib) importTOML importJSON;
+        in
+        {
+          # TODO(Spoon): use to set version of p.wrapper, containers, etc
+          # - What if I didn't?
+          rustVersion = (importTOML ./Cargo.toml).workspace.package.version;
+        };
+
+      nixosConfigurations.testing.modules = [
+        ./nixos-testing.nix
+        garnix-lib.nixosModules.garnix
+        {
+          garnix.server = {
+            enable = true;
+            persistence.enable = true;
+            persistence.name = "wcpc-testing";
+          };
+        }
+      ];
+
+      flakelight.builtinFormatters = false;
+      formatters = pkgs: {
+        # TODO(Spoon): use `{ rustfmt, etc }:`
+
+        "*.rs" = "${pkgs.rustfmt}/bin/rustfmt";
+        "*.nix" = "${pkgs.nixfmt-rfc-style}/bin/nixfmt --strict";
+
+        # TODO(Spoon): does this make the formatter not idempotent?
+        # "*.gen.pdf" =
+        #   let
+        #     typst-pseudoformatter = pkgs.writeShellScript "typst-pseudoformatter" ''
+        #       cd "$(${pkgs.coreutils}/bin/dirname "$1")" # TODO(Spoon): finish this
+        #       ${pkgs.cabal2nix}/bin/cabal2nix . --hpack > "$1"
+        #     '';
+        #   in
+        #   "${typst-pseudoformatter}";
+
+        # == Langs:
+        # - Prettier
+        #   - HTML
+        #   - CSS
+        #   - SCSS
+        #   - JS
+        #   - MJS
+        #   - TS
+        #   - Astro
+        #   - MD
+        #   - JSON
+        #   - YAML
+        #   - YML
+        # - Typst
+        # - sql? pgformatter
+        # - nginx.conf? nginx-config-formatter
+        # - TOML? - taplo
       };
-      frontend = pkgs.callPackage ./nix/frontend.nix {inherit version;};
-      wrapper = pkgs.callPackage ./nix/wrapper.nix {inherit version backend frontend rocket_config;};
-      rocket_config = pkgs.callPackage ./nix-template/rocket_config.nix {openjdk = pkgs.jre_minimal.override {modules = ["java.base" "jdk.compiler"];};};
 
-      container = pkgs.callPackage ./nix/container.nix {inherit wrapper;};
-      container-stream = pkgs.runCommand "container-stream" {
-        script = container.override {stream = true;};
-        nativeBuildInputs = [pkgs.coreutils];
-      } "mkdir -p $out/bin; ln -s $script $out/bin/container-stream";
-      nixos-vm = (pkgs.nixos [{environment.systemPackages = [wrapper];} ./nix/testing-nixos-config.nix]).vm;
-
-      default = wrapper;
+      checks = {
+        manual-blocker =
+          {
+            runCommand,
+            lib,
+            ripgrep,
+            ...
+          }:
+          runCommand "manual-blocker" { } ''
+            cd ${./.}
+            if ${lib.getExe ripgrep} --context 1 --pretty --ignore-case "BLOCK()ME"; then
+              # RG succeeds = matches found
+              echo "Found unfinished work!"
+              exit 1
+            else
+              touch $out
+            fi
+          '';
+        # TODO(Spoon): crane workspace tests
+      };
     };
-    checks = system: let
-      pkgs = pkgsFor system;
-    in
-      {
-        inherit (packages system) backend container nixos-vm; # TODO(Spoon): this might use a fair amount of disk space for dev
-        nix-formatting = pkgs.runCommand "nix-check-formatting" {} "${pkgs.alejandra}/bin/alejandra --check ${self} && touch $out";
-        frontend-formatting = (packages system).frontend.overrideAttrs (old: {
-          name = old.name + "check-formatting";
-          buildPhase = "npm run format-check";
-          installPhase = "touch $out";
-        });
-        devshell = self.devShells.${system}.default;
-        # TODO(Spoon): Frontend eslint eventually
-      }
-      // (packages system).backend.tests; # All backend tests
-  in {
-    packages = forAllSystems packages;
-    checks = forAllSystems checks;
-    formatter = forAllSystems (system: (pkgsFor system).alejandra);
-    devShells = forAllSystems (system: {default = import ./nix/shell.nix {pkgs = pkgsFor system;};});
-    templates.default = {
-      path = ./nix-template;
-      description = "Template for deploying WCPC (outside of WCU)";
-      welcomeText = ''
-        Deploy steps (see README.md):
-
-        - Generate secrets in `secrets/`
-
-        - Edit `rocket_config.nix`
-
-        - Build and load the image: `nix run .#container-stream 2>/dev/null | sudo docker load`
-
-        - Run the container: `sudo docker run --rm -d -v ./secrets:/secrets:ro -v wcpc_database:/database -p 443:443/tcp wcpc`
-      '';
-    };
-  };
 }
+
 /*
-TODO(Spoon):
-Considerations for deployment:
-- How will the certs (TLS, SAML) be renewed?
-  - Outside container?
-- Container healthcheck?
-- port 80? - redirect (& acme challenge?)
+  TODO(Spoon):
+  - container for backend
+  - rocket_config
 
-Build:
-- Hakari?
+  - Front NGINX
+    - conf, substituted (with what? nginxRoot)
+  - runner-nginx (?)
+    - nginx conf, substituted
+  - postgres?
+    - dbInit
+    - pg conf + hba conf
+  - nixos-testing vm
+
+  == Later Commits
+  - Merge `.gitignore`s and clean up
+  - Split runner
+    - Justfile
+    - `.cargo/config.toml` includes `runner = systemd-run ... Delegate=yes`
+    - Container for runner
+  - Redo runner - technically push-off-able
+  - package for WC assets? - all assets are loaded from a given directory
+  - Assert frontend/package.json version matches Cargo.toml
+  - Rename to OxideJudge everywhere
+  - Make README
+    - Logo: Ferris as Lady Justice
+    - Deploy docs
+    - reference paper? - architechure documentation for contributors
+    - garnix badge
+    - link to staging server
+
+  == Can be pushed off
+  - make backend not read `.env`
+  - make backend not do TLS
+    - are there configurations where it's running atandalone?
+    - No more OpenSSL???
+  - mailmap?
+  - container healthcheck?
+  - remove sessions from database
+  - include git rev in UI somewhere, add in wrapper to avoid backend rebuilds
+    - or in container?
+    - or in nixos or whatever runs the containers? - avoid unneeded rebuilds
+    - or don't include?
+  - mimimize container closure, try to remove bash, etc
+    - something was pulling in X11 libs
+  - validate config during build
+  - <https://garnix.io/docs/actions>
+    - Push images to OCI registry; have WCPC pull?
+    - Could also trigger GH actions workflow on complete - nix is more portable tho
+  - flake nixConfig use garnix cache?
+
+  == WILL be pushed off
+  - FPGA Runner
 */
-

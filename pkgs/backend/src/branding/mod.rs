@@ -17,8 +17,8 @@ use rocket::fairing::AdHoc;
 // - [x] Images (could still be better)
 // - [x] Favicons
 // - [x] Make browserconfig.xml and friends use this config (new routes?)
-// - [ ] Monaco editor theme based on colors automatically
-// - [ ] Highlight.js theme based on colors automatically
+// - [x] Monaco editor theme based on colors automatically
+// - [x] Highlight.js theme based on colors automatically
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -35,7 +35,7 @@ enum FooterItem {
 }
 
 fn default_name() -> String {
-    "WCPC".to_string()
+    "OxideJudge".to_string()
 }
 
 fn default_sso_name() -> String {

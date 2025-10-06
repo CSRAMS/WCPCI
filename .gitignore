@@ -6,3 +6,5 @@ database.sqlite*
 .sqlx/
 .*.env
 *.qcow2
+
+/devShell/local.env

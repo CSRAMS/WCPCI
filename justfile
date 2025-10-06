@@ -1,52 +1,45 @@
 _default:
-    @just --list --unsorted --justfile {{justfile()}}
-
+    @"{{ just_executable() }}" --list --unsorted --justfile "{{ justfile() }}"
 
 # Set up frontend, database, and environment variables
 setup:
-    cd frontend && npm i
-    cargo sqlx database setup
-    -cp -n nix-template/secrets/.env .dev.env
+    cd ./pkgs/frontend && npm install
+    cargo sqlx database setup --source ./pkgs/backend/migrations/
+    [ -f ./devShell/local.env ] || cp ./devShell/local.env.template ./devShell/local.env
 
-# Build the frontend
-frontend:
-    cd frontend && npm run build
+# Watch the frontend folder and rebuild on changes
+dev-frontend:
+    cd ./pkgs/frontend && npm run watch
 
-# Start a development server
+# Run the backend
+dev-backend:
+    cd ./pkgs/backend && cargo build # TODO(Spoon): change this to run once runner is split
+    cd ./devShell && systemd-run --user --scope -p Delegate=yes ../target/debug/backend
+
+# TODO(Spoon): once split, run runner (in podman or with cargo run? - probably cargo run)
+# ^ Podman + nix works on MacOS, systemd-run wouldn't
+
+# Run all dev tasks to get a full environment
 dev:
-    cd frontend && npm run build
-    cargo run
+    mprocs "just dev-backend" "just dev-frontend"
 
-# Run the backend and recompile the frontend when the frontend changes
-dev-watch:
-    mprocs "cargo run" "cd frontend && npm run watch"
-
-# Run the backend with systemd-run delegating cgroup control
-dev-sdrun:
-    cargo build
-    systemd-run --user --scope -p Delegate=yes ./target/debug/wcpc
-
-# Run a worker test shell with systemd-run delegating cgroup control
-dev-test-shell:
-    cargo build
-    systemd-run --user --scope -p Delegate=yes ./target/debug/wcpc --worker-test-shell
-
-# Format backend & frontend
+alias fmt := format
+# Format everything
 format:
-    cargo fmt
-    cd frontend && npm run format
     nix fmt
 
-# Lint the backend
+# Lint all rust code
 lint:
-    cargo lint
+    # Keep this in sync with Nix tests
+    cargo clippy --all-targets -- -D warnings
 
 # Update frontend & backend dependencies
 update:
-    cargo update
-    cd frontend && npm update --latest
+    cargo update # TODO: do we want flags to make it update more?
+    cd ./pkgs/frontend && npm update --latest
     nix flake update
 
-# Run quick checks
+alias c := check
+# Run flake checks
 check:
-    nix flake check
+    nix flake check --option allow-import-from-derivation false --keep-going --log-format multiline-with-logs

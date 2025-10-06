@@ -17,10 +17,18 @@
   coreutils,
   typescript,
   nodejs,
-  openjdk,
   mono,
   writers,
+  pkgs,
 }:
+let
+  openjdk = pkgs.jre_minimal.override {
+    modules = [
+      "java.base"
+      "jdk.compiler"
+    ];
+  }; # This builds a JDK with only these Java Platform Modules, # BLOCKME: rewrite
+in
 # TODO: The backend seems to rebuild when changing this?
 writers.writeTOML "rocket.toml" {
   release = {
@@ -29,7 +37,7 @@ writers.writeTOML "rocket.toml" {
     port = 443;
     # ip_header = "X-Forwarded-For";
     address = "0.0.0.0";
-    url = "https://codingcomp.cs.wcupa.edu"; # This should *not* have a trailing slash
+    url = "https://codingcomp.cs.wcupa.edu"; # This should *not* have a trailing slash # TODO(Spoon): share this with NGINX ACME url?
 
     # TODO(Spoon): Do the data things
     saml = {
@@ -63,11 +71,14 @@ writers.writeTOML "rocket.toml" {
       isolation = {
         workers_parent = "/tmp";
         # Putting ls here so it'll include the entire coreutils dir in PATH
-        include_bins = ["${gcc}/bin/cc" "${coreutils}/bin/ls"];
+        include_bins = [
+          "${gcc}/bin/cc"
+          "${coreutils}/bin/ls"
+        ];
         bind_mounts = [
-          {src = "/nix/store";}
-          {src = "/bin/sh";}
-          {src = "/usr/bin/env";}
+          { src = "/nix/store"; }
+          { src = "/bin/sh"; }
+          { src = "/usr/bin/env"; }
         ];
       };
 
@@ -84,7 +95,7 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.sh";
             run_cmd = {
               binary = "${bash}/bin/bash";
-              args = ["./main.sh"];
+              args = [ "./main.sh" ];
             };
           };
         };
@@ -100,7 +111,7 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.py";
             run_cmd = {
               binary = "${python3}/bin/python3";
-              args = ["./main.py"];
+              args = [ "./main.py" ];
             };
           };
         };
@@ -118,9 +129,15 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.rs";
             compile_cmd = {
               binary = "${rustc}/bin/rustc";
-              args = ["main.rs" "-o" "main"];
+              args = [
+                "main.rs"
+                "-o"
+                "main"
+              ];
             };
-            run_cmd = {binary = "./main";};
+            run_cmd = {
+              binary = "./main";
+            };
           };
         };
         haskell = {
@@ -135,9 +152,11 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.hs";
             compile_cmd = {
               binary = "${ghc}/bin/ghc";
-              args = ["main.hs"];
+              args = [ "main.hs" ];
             };
-            run_cmd = {binary = "./main";};
+            run_cmd = {
+              binary = "./main";
+            };
           };
         };
         ocaml = {
@@ -152,9 +171,15 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.ml";
             compile_cmd = {
               binary = "${ocaml}/bin/ocamlc";
-              args = ["main.ml" "-o" "main"];
+              args = [
+                "main.ml"
+                "-o"
+                "main"
+              ];
             };
-            run_cmd = {binary = "./main";};
+            run_cmd = {
+              binary = "./main";
+            };
           };
         };
         typescript = {
@@ -170,11 +195,11 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.ts";
             compile_cmd = {
               binary = "${typescript}/bin/tsc";
-              args = ["main.ts"];
+              args = [ "main.ts" ];
             };
             run_cmd = {
               binary = "${nodejs}/bin/node";
-              args = ["main.js"];
+              args = [ "main.js" ];
             };
           };
         };
@@ -194,11 +219,11 @@ writers.writeTOML "rocket.toml" {
             file_name = "Main.java";
             compile_cmd = {
               binary = "${openjdk}/bin/javac";
-              args = ["Main.java"];
+              args = [ "Main.java" ];
             };
             run_cmd = {
               binary = "${openjdk}/bin/java";
-              args = ["Main"];
+              args = [ "Main" ];
             };
           };
         };
@@ -219,9 +244,15 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.c";
             compile_cmd = {
               binary = "${gcc}/bin/gcc";
-              args = ["main.c" "-o" "main"];
+              args = [
+                "main.c"
+                "-o"
+                "main"
+              ];
             };
-            run_cmd = {binary = "./main";};
+            run_cmd = {
+              binary = "./main";
+            };
           };
         };
         cpp = {
@@ -242,9 +273,15 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.cpp";
             compile_cmd = {
               binary = "${gcc}/bin/g++";
-              args = ["main.cpp" "-o" "main"];
+              args = [
+                "main.cpp"
+                "-o"
+                "main"
+              ];
             };
-            run_cmd = {binary = "./main";};
+            run_cmd = {
+              binary = "./main";
+            };
           };
         };
         csharp = {
@@ -265,11 +302,11 @@ writers.writeTOML "rocket.toml" {
             file_name = "Program.cs";
             compile_cmd = {
               binary = "${mono}/bin/mcs";
-              args = ["Program.cs"];
+              args = [ "Program.cs" ];
             };
             run_cmd = {
               binary = "${mono}/bin/mono";
-              args = ["Program.exe"];
+              args = [ "Program.exe" ];
             };
           };
         };
@@ -291,9 +328,16 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.go";
             compile_cmd = {
               binary = "${go}/bin/go";
-              args = ["build" "-o" "main" "main.go"];
+              args = [
+                "build"
+                "-o"
+                "main"
+                "main.go"
+              ];
             };
-            run_cmd = {binary = "./main";};
+            run_cmd = {
+              binary = "./main";
+            };
           };
         };
         lua = {
@@ -308,7 +352,7 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.lua";
             run_cmd = {
               binary = "${lua}/bin/lua";
-              args = ["./main.lua"];
+              args = [ "./main.lua" ];
             };
           };
         };
@@ -324,7 +368,7 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.pl";
             run_cmd = {
               binary = "${perl}/bin/perl";
-              args = ["./main.pl"];
+              args = [ "./main.pl" ];
             };
           };
         };
@@ -340,7 +384,7 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.rb";
             run_cmd = {
               binary = "${ruby}/bin/ruby";
-              args = ["./main.rb"];
+              args = [ "./main.rb" ];
             };
           };
         };
@@ -358,7 +402,7 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.php";
             run_cmd = {
               binary = "${php}/bin/php";
-              args = ["./main.php"];
+              args = [ "./main.php" ];
             };
           };
         };
@@ -379,11 +423,14 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.fs";
             compile_cmd = {
               binary = "${mono}/bin/fsharpc";
-              args = ["--standalone" "main.fs"];
+              args = [
+                "--standalone"
+                "main.fs"
+              ];
             };
             run_cmd = {
               binary = "${mono}/bin/mono";
-              args = ["main.exe"];
+              args = [ "main.exe" ];
             };
           };
         };
@@ -399,7 +446,10 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.r";
             run_cmd = {
               binary = "${R}/bin/Rscript";
-              args = ["--vanilla" "main.r"];
+              args = [
+                "--vanilla"
+                "main.r"
+              ];
             };
           };
         };
@@ -415,7 +465,7 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.jl";
             run_cmd = {
               binary = "${julia-bin}/bin/julia";
-              args = ["main.jl"];
+              args = [ "main.jl" ];
             };
           };
         };
@@ -433,11 +483,19 @@ writers.writeTOML "rocket.toml" {
             file_name = "main.kt";
             compile_cmd = {
               binary = "${kotlin}/bin/kotlinc";
-              args = ["main.kt" "-include-runtime" "-d" "main.jar"];
+              args = [
+                "main.kt"
+                "-include-runtime"
+                "-d"
+                "main.jar"
+              ];
             };
             run_cmd = {
               binary = "${openjdk}/bin/java";
-              args = ["-jar" "main.jar"];
+              args = [
+                "-jar"
+                "main.jar"
+              ];
             };
           };
         };
