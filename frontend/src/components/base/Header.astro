@@ -40,6 +40,7 @@ const { navSpacerClass, urlSuffix, noTemplate } = Astro.props;
                 class="flex flex-row flex-wrap justify-center gap-4 justify-self-start"
             >
                 <Link color="white" class="my-auto" href="/contests">All Contests</Link>
+                <Link color="white" class="my-auto" href="/profiles">All Users</Link>
                 <If expression="logged_in and is_admin(user=user)">
                     <Link color="white" class="my-auto" href="/admin">Site Admin</Link>
                 </If>

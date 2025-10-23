@@ -110,6 +110,30 @@ const description = `Leaderboard for ${variable("contest.name")} on ${variable("
         </div>
     </If>
 
+    <div class="flex flex-row gap-4 text-xl">
+      <span class="flex flex-row gap-1">
+        <Icon
+            name="tabler:circle-x"
+            class="my-auto text-gray-500"
+        />
+        Rejected
+      </span>
+      <span class="flex flex-row gap-1">
+        <Icon
+            name="tabler:circle-check"
+            class="my-auto text-green-600"
+        />
+        Accepted
+      </span>
+      <span class="flex flex-row gap-1">
+        <Icon
+            name="tabler:clock-check"
+            class="my-auto text-green-600"
+        />
+        First to Solve
+      </span>
+    </div>
+
     <TemplatedTable
         addColSpan={100}
         id="leaderboard"

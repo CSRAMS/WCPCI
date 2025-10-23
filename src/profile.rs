@@ -70,8 +70,17 @@ async fn profile(
     Ok(Template::render("profile", ctx))
 }
 
+#[get("/profiles")]
+pub async fn list_users(mut db: DbConnection, user: Option<&User>) -> ResultResponse<Template> {
+    let users = User::list(&mut db).await?;
+    let ctx = context_with_base!(user, users);
+    Ok(Template::render("users", ctx))
+}
+
 pub fn stage() -> AdHoc {
     AdHoc::on_ignite("User Profiles", |rocket| async {
-        rocket.mount("/profile", routes![profile])
+        rocket
+            .mount("/", routes![list_users])
+            .mount("/profile", routes![profile])
     })
 }

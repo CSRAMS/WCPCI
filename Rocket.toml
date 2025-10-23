@@ -88,7 +88,7 @@ max_fds = 20
 
 
 [debug.run.isolation.seccomp]
-# mismatch_action = { action = "log" }
+mismatch_action = { action = "log" }
 
 # -- Bash
 

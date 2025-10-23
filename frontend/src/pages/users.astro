@@ -1,0 +1,12 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import UserTable from "@/components/table/UserTable.astro";
+import BreadCrumb from "@/components/BreadCrumb.astro";
+import Title from "@/components/Title.astro";
+---
+
+<Layout noIndex makeTile title="User Admin" path="/users">
+    <BreadCrumb entries={[["Users", "/users"]]} />
+    <Title>Users</Title>
+    <UserTable/>
+</Layout>

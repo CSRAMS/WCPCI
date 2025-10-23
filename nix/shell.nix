@@ -20,9 +20,11 @@ in
       libiconv
       libtool
       libxml2
+      libxmlb
       libxslt
       llvmPackages.libclang
       openssl
+      openssl_3
       pkg-config
       xmlsec
     ];
@@ -33,16 +35,17 @@ in
       rustfmt
       rust-analyzer
       nodejs
-      nodePackages.pnpm
       gcc
       libiconv
       libtool
       ghc
       typescript
       libxml2
+      libxmlb
       libxslt
       llvmPackages.libclang
       openssl
+      openssl_3
       pkg-config
       xmlsec
       sqlx-cli
