@@ -1,0 +1,15 @@
+builds:
+  exclude: []
+  include:
+    # TODO(Spoon): other systems?
+    - "checks.x86_64-linux.*"
+    - "devShells.x86_64-linux.*" # TODO(Spoon): why do we need this?
+    - "nixosConfigurations.*"
+    # flakelight adds a check for each package and nixosConfiguration
+    # nixosConfigurations.* must be built to deploy a host
+
+servers:
+  - configuration: testing
+    deployment:
+      type: on-branch
+      branch: dev
