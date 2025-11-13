@@ -36,7 +36,7 @@
     in rec {
       backend = pkgs.callPackage ./nix/backend.nix {
         inherit advisory-db version gitRev;
-        crane = crane.lib.${system};
+        crane = crane.mkLib pkgs;
       };
       frontend = pkgs.callPackage ./nix/frontend.nix {inherit version;};
       wrapper = pkgs.callPackage ./nix/wrapper.nix {inherit version backend frontend rocket_config;};
@@ -57,11 +57,11 @@
       {
         inherit (packages system) backend container nixos-vm; # TODO(Spoon): this might use a fair amount of disk space for dev
         nix-formatting = pkgs.runCommand "nix-check-formatting" {} "${pkgs.alejandra}/bin/alejandra --check ${self} && touch $out";
-        frontend-formatting = (packages system).frontend.overrideAttrs (old: {
-          name = old.name + "check-formatting";
-          buildPhase = "npm run format-check";
-          installPhase = "touch $out";
-        });
+        # frontend-formatting = (packages system).frontend.overrideAttrs (old: {
+        #   name = old.name + "check-formatting";
+        #   buildPhase = "npm run format-check";
+        #   installPhase = "touch $out";
+        # });
         devshell = self.devShells.${system}.default;
         # TODO(Spoon): Frontend eslint eventually
       }

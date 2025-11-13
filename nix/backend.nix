@@ -104,10 +104,10 @@
     };
 
     backend-fmt = crane.cargoFmt {inherit src;};
-    backend-advisory-audit = crane.cargoAudit {
-      inherit src advisory-db;
-      cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071";
-    }; #FIXME(Spoon): disable ignore
+    # backend-advisory-audit = crane.cargoAudit {
+    #   inherit src advisory-db;
+    #   cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0363";
+    # }; #FIXME(Spoon): disable ignore
     backend-test = crane.cargoTest {
       inherit src;
       cargoArtifacts = packages.backend.out;

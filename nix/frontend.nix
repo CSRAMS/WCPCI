@@ -9,7 +9,7 @@ buildNpmPackage {
   src = ../frontend;
   packageJSON = ../frontend/package.json;
 
-  npmDepsHash = "sha256-LM+ZrYYmkFOfWcCY1kpzl4QueZXBEkBbM2gv/FC7i6c=";
+  npmDepsHash = "sha256-FpQ8jFe5cJ7amW6GXoQpfAKiqC4u00+OYBqqSeRe9fU=";
 
   installPhase = "cp -r dist/ $out";
 
