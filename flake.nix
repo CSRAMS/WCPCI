@@ -12,6 +12,11 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+
+    garnix-lib = {
+      url = "github:garnix-io/garnix-lib";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -19,6 +24,7 @@
     nixpkgs,
     crane,
     advisory-db,
+    garnix-lib,
   }: let
     forAllSystems = nixpkgs.lib.genAttrs [
       "aarch64-linux"
@@ -85,6 +91,21 @@
 
         - Run the container: `sudo docker run --rm -d -v ./secrets:/secrets:ro -v wcpc_database:/database -p 443:443/tcp wcpc`
       '';
+    };
+    nixosConfigurations.testing = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        {environment.systemPackages = [self.packages.x86_64-linux.wrapper];}
+        garnix-lib.nixosModules.garnix
+        {
+          garnix.server = {
+            enable = true;
+            persistence.enable = true;
+            persistence.name = "wcpc-testing";
+          };
+        }
+        ./nix/testing-nixos-config.nix
+      ];
     };
   };
 }

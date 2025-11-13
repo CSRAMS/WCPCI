@@ -31,6 +31,26 @@
         "type": "github"
       }
     },
+    "garnix-lib": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1758561011,
+        "narHash": "sha256-yYXd4qOH22Oe5PaaoGms0imXYweQeEeme+VUoMm4zwY=",
+        "owner": "garnix-io",
+        "repo": "garnix-lib",
+        "rev": "fbd9865a68c8f7f4bd9d4e136f27be04098fe1ee",
+        "type": "github"
+      },
+      "original": {
+        "owner": "garnix-io",
+        "repo": "garnix-lib",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1756536218,
@@ -51,6 +71,7 @@
       "inputs": {
         "advisory-db": "advisory-db",
         "crane": "crane",
+        "garnix-lib": "garnix-lib",
         "nixpkgs": "nixpkgs"
       }
     }
