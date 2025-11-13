@@ -55,8 +55,8 @@ impl Type<sqlx::Sqlite> for ColorScheme {
 impl Encode<'_, sqlx::Sqlite> for ColorScheme {
     fn encode_by_ref(
         &self,
-        buf: &mut <sqlx::Sqlite as sqlx::database::HasArguments<'_>>::ArgumentBuffer,
-    ) -> IsNull {
+        buf: &mut <sqlx::Sqlite as sqlx::Database>::ArgumentBuffer<'_>,
+    ) -> std::result::Result<IsNull, sqlx::error::BoxDynError> {
         let val = format!("{:?}", self);
         <std::string::String as Encode<'_, sqlx::Sqlite>>::encode_by_ref(&val, buf)
     }
@@ -64,8 +64,8 @@ impl Encode<'_, sqlx::Sqlite> for ColorScheme {
 
 impl Decode<'_, sqlx::Sqlite> for ColorScheme {
     fn decode(
-        value: <sqlx::Sqlite as sqlx::database::HasValueRef<'_>>::ValueRef,
-    ) -> std::result::Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        value: <sqlx::Sqlite as sqlx::Database>::ValueRef<'_>,
+    ) -> std::result::Result<Self, sqlx::error::BoxDynError> {
         let s = <String as Decode<sqlx::Sqlite>>::decode(value)?;
         Ok(s.into())
     }

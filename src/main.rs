@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use rocket::{get, routes, Build};
 use rocket_dyn_templates::Template;
 
@@ -90,6 +92,10 @@ fn main() -> Result {
     } else if args.contains(&"--worker-test-shell".to_string()) {
         run::worker::run_test_shell().context("Worker test shell failed")
     } else {
-        _main().context("Rocket failed")
+        if let Err(why) = _main() {
+            eprintln!("Rocket Failed: {why:?}");
+            exit(1);
+        }
+        Ok(())
     }
 }
