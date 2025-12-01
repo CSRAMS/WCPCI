@@ -1,0 +1,187 @@
+# This is for testing; production stuff should be generated with Nix or written manually
+
+url = "http://localhost:8000"
+secret_key = "12345678901234567890123456789012345678901234"
+template_dir = "frontend/dist"
+admins = [ "bwc9876@example.com" ]
+timezone = "America/New_York"
+# log_level = "debug"
+
+[databases.sqlite_db]
+url = "./database.sqlite"
+
+[oauth.github]
+provider = "GitHub"
+
+[oauth.google]
+provider = "Google"
+redirect_uri = "http://localhost:8000/auth/google/callback"
+
+
+[saml]
+entity_id = "urn:wcpc:saml-debugging"
+idp_meta_url = "https://mocksaml.com/api/namespace/wcpc_testing_provider/saml/metadata"
+contact_person = "Ben"
+contact_email = "bwc9876@example.org"
+contact_telephone = "555-555-5555"
+organization = "WCPC"
+
+[saml.attrs]
+display_name = "firstName"
+email = "email"
+
+[branding]
+icon_path = "./icon.png"
+
+[branding.meta]
+tagline = "Compete and Earn Prizes"
+
+[branding.images.hero_image]
+path = "./hero_image.webp"
+alt = "Drawing of several students working on computers at WCPC"
+
+[branding.images.navbar_logo]
+path = "./navbar_logo.webp"
+alt = "WCPC Logo"
+
+[branding.homepage]
+heading_text = "Compete, Learn, and Earn Prizes at WCPC"
+body_text = """
+Join us at the West Chester Programming Competition for a day of free food, problem solving,
+and a chance to win prizes. Any West Chester student is welcome to join.
+"""
+
+[branding.colors]
+# primary = "#00ff00"
+# secondary = "#ff0000"
+# background = "#0000ff"
+# accent = "#ffff00"
+# text = "#ff00ff"
+
+[run]
+max_program_length = 100000
+default_language = "python"
+pizzaz = 250
+
+[run.isolation]
+workers_parent = "/tmp"
+include_bins = [ "cc", "ls" ]
+
+[[run.isolation.bind_mounts]]
+src = "/nix/store"
+
+[[run.isolation.bind_mounts]]
+src = "/bin/sh"
+
+[[run.isolation.bind_mounts]]
+src = "/usr/bin/env"
+
+[run.isolation.limits]
+tmpfs_size = "3%"
+hard_timeout_internal_secs = 1
+hard_timeout_user_secs = 5
+hard_cpu_limit_secs = 5
+hard_memory_limit_bytes = 500000000 # 500 MB
+max_fds = 20
+
+
+[run.isolation.seccomp]
+mismatch_action = { action = "log" }
+
+# -- Bash
+
+[run.languages.bash.display]
+name = "Bash"
+default_code = """
+echo "Hello, World!"
+"""
+monaco_contribution = "shell"
+
+[run.languages.bash.runner]
+file_name = "main.sh"
+run_cmd = { binary = "bash", args = [ "./main.sh" ] }
+
+# -- C
+
+[run.languages.c.display]
+name = "C"
+default_code = """
+#include <stdio.h>
+
+int main() {
+    printf("Hello, World!");
+    return 0;
+}
+"""
+monaco_contribution = "c"
+
+[run.languages.c.runner]
+file_name = "main.c"
+compile_cmd = { binary = "gcc", args = [ "main.c", "-o", "main" ] }
+run_cmd = { binary = "./main" }
+
+# -- C++
+
+[run.languages.cpp.display]
+name = "C++"
+default_code = """
+#include <iostream>
+
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}
+"""
+devicon_icon = "cplusplus"
+monaco_contribution = "cpp"
+
+[run.languages.cpp.runner]
+file_name = "main.cpp"
+compile_cmd = { binary = "g++", args = [ "main.cpp", "-o", "main" ] }
+run_cmd = { binary = "./main" }
+
+# -- Python
+
+[run.languages.python.display]
+name = "Python"
+default_code = """
+
+print("Hello, World!")
+
+"""
+monaco_contribution = "python"
+
+[run.languages.python.runner]
+file_name = "main.py"
+run_cmd = { binary = "python", args = [ "./main.py" ] }
+
+# -- Rust
+
+[run.languages.rust.display]
+name = "Rust"
+default_code = """
+pub fn main() {
+    println!("Hello, World!");
+}
+"""
+monaco_contribution = "rust"
+
+[run.languages.rust.runner]
+file_name = "main.rs"
+include_bins = [ "cc" ]
+compile_cmd = { binary = "rustc", args = [ "main.rs", "-o", "main" ] }
+run_cmd = { binary = "./main" }
+
+# -- TypeScript
+
+[run.languages.typescript.display]
+name = "TypeScript / JavaScript"
+default_code = """
+console.log("Hello, World!");
+"""
+monaco_contribution = "typescript"
+
+[run.languages.typescript.runner]
+file_name = "index.ts"
+compile_cmd = { binary = "tsc", args = [ "index.ts" ] }
+run_cmd = { binary = "node", args = [ "index.js" ] }

@@ -149,7 +149,6 @@
     - link to staging server
 
   == Can be pushed off
-  - make backend not read `.env`
   - make backend not do TLS
     - are there configurations where it's running atandalone?
     - No more OpenSSL???

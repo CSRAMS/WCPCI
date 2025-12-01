@@ -7,7 +7,7 @@ let
   # TODO(Spoon): see if this includes artifacts ; if so, do only binary
   package = craneLib.buildPackage {
     strictDeps = true;
-    pname = "backend";
+    pname = "oxidejudge-backend";
     cargoExtraArgs = "-p backend";
     src = lib.fileset.toSource {
       root = ../../.;

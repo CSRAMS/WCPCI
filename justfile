@@ -5,7 +5,7 @@ _default:
 setup:
     cd ./pkgs/frontend && npm install
     cargo sqlx database setup --source ./pkgs/backend/migrations/
-    [ -f ./devShell/local.env ] || cp ./devShell/local.env.template ./devShell/local.env
+    [ -f ./devShell/secrets.toml ] || cp ./devShell/secrets.template.toml ./devShell/secrets.toml
 
 # Watch the frontend folder and rebuild on changes
 dev-frontend:

@@ -261,7 +261,6 @@ dependencies = [
  "chrono",
  "chrono-tz 0.10.4",
  "color-art",
- "dotenvy",
  "flate2",
  "image",
  "log",

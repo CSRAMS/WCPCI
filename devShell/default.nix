@@ -16,12 +16,10 @@ craneLib.devShell {
     # TODO(Spoon): test this without jj
 
     export DATABASE_URL="sqlite://$OXJ_ROOT/devShell/database.sqlite"
-    export ROCKET_TEMPLATE_DIR="$OXJ_ROOT/pkgs/frontend/dist"
-    export ROCKET_CONFIG="$OXJ_ROOT/devShell/Rocket.toml"
+    export OXIDEJUDGE_TEMPLATE_DIR="$OXJ_ROOT/pkgs/frontend/dist"
+    export OXIDEJUDGE_CONFIG="$OXJ_ROOT/devShell/config.toml"
+    export OXIDEJUDGE_SECRETS="$OXJ_ROOT/devShell/secrets.toml"
     # TODO(Spoon): images
-
-    # At the end, to make it override things
-    [ -f "$OXJ_ROOT/devShell/local.env" ] && source "$OXJ_ROOT/devShell/local.env"
   '';
 
   packages = __attrValues {
@@ -40,7 +38,8 @@ craneLib.devShell {
 
       libtool # Something needs `ltdl`, not sure what
 
-      # TODO(Spoon): all languages in Rocket.toml, or prune Rocket.toml
+      # TODO(Spoon): all languages in Rocket.toml, or prune config.toml
+      #   - Might as well have node + rust in config.toml
       ;
   };
   # Crane includes:
@@ -50,7 +49,6 @@ craneLib.devShell {
   # - rustfmt
 }
 
-# BLOCKME: test
 # TODO(Spoon): test: (incl. on MacOS)
 # - clone repo
 # - just setup

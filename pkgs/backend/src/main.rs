@@ -1,4 +1,6 @@
-use rocket::{get, routes, Build};
+use rocket::figment::providers::{Env, Format, Toml};
+use rocket::figment::{Figment, Profile};
+use rocket::{get, routes, Build, Config};
 use rocket_dyn_templates::Template;
 
 #[macro_use]
@@ -43,20 +45,29 @@ async fn md_help(user: Option<&User>) -> Template {
     Template::render("md_help", ctx)
 }
 
-fn rocket() -> rocket::Rocket<Build> {
-    if cfg!(debug_assertions) {
-        println!("Loading .dev.env...");
-        dotenvy::from_filename(".dev.env").ok();
-    }
+pub fn figment() -> Result<Figment> {
+    let config_path = Env::var("OXIDEJUDGE_CONFIG").context("OXIDEJUDGE_CONFIG was not set")?;
+    let secrets_path = Env::var("OXIDEJUDGE_SECRETS").context("OXIDEJUDGE_SECRETS was not set")?;
+    let figment = Figment::from(Config::default())
+        .merge(Toml::file(config_path))
+        .merge(Toml::file(secrets_path))
+        // TODO(Spoon): set `ident`? set oauth.$1.provider = $1? set cli_colors = false by default
+        .merge(
+            Env::prefixed("OXIDEJUDGE_") // TODO: just stuff for DB URL, template dir, saml certs (& TLS certs?)
+                .ignore(&["CONFIG", "SECRETS", "PROFILE"])
+                .global(),
+        )
+        .select(Profile::from_env_or(
+            "OXIDEJUDGE_PROFILE",
+            Config::DEFAULT_PROFILE,
+        ));
+    Ok(figment)
+}
 
-    println!("Loading .env...");
-    if let Err(why) = dotenvy::dotenv() {
-        eprintln!("Failed to load .env: {}", why);
-    }
-
+fn rocket(figment: Figment) -> rocket::Rocket<Build> {
     println!("Start of WCPC v{}", env!("CARGO_PKG_VERSION"));
 
-    rocket::build()
+    rocket::custom(figment)
         .mount("/", routes![index, md_help])
         .attach(error::stage())
         .attach(db::stage())
@@ -76,8 +87,9 @@ fn rocket() -> rocket::Rocket<Build> {
 // It's the main function so I'm not really concerned with sizes
 #[allow(clippy::result_large_err)]
 #[rocket::main]
-async fn _main() -> Result<(), rocket::Error> {
-    rocket().ignite().await?.launch().await?;
+async fn _main() -> Result<()> {
+    let figment = figment()?;
+    rocket(figment).ignite().await?.launch().await?;
     Ok(())
 }
 

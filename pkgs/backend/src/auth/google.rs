@@ -71,7 +71,7 @@ impl CallbackHandler for GoogleLogin {
     }
 
     async fn unlink(db: &mut DbPoolConnection, user: &User) -> Result<SqliteQueryResult> {
-        sqlx::query!("UPDATE user SET github_id = NULL WHERE id = ?", user.id)
+        sqlx::query!("UPDATE user SET google_id = NULL WHERE id = ?", user.id)
             .execute(&mut **db)
             .await
             .context("Error unlinking Google account")

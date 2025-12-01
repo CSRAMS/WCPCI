@@ -3,15 +3,15 @@
   backend,
   makeWrapper,
   runCommand,
-  rocket_config,
+  oxidejudge_config,
 }:
 let
   inherit (backend.meta) mainProgram;
 in
-runCommand "wrapper"
+runCommand "oxidejudge-wrapped"
   {
     nativeBuildInputs = [ makeWrapper ];
     meta = { inherit mainProgram; };
   }
-  "makeWrapper ${backend}/bin/${mainProgram} $out/bin/${mainProgram} --set ROCKET_TEMPLATE_DIR ${frontend} --set ROCKET_CONFIG ${rocket_config}"
+  "makeWrapper ${backend}/bin/${mainProgram} $out/bin/${mainProgram} --set OXIDEJUDGE_TEMPLATE_DIR ${frontend} --set OXIDEJUDGE_CONFIG ${oxidejudge_config}"
 # TODO(Spoon): is there a better way to do this?

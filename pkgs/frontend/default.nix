@@ -7,7 +7,7 @@ let
   inherit (lib) importJSON;
 in
 buildNpmPackage {
-  name = "frontend";
+  name = "oxidejudge-frontend";
   inherit (importJSON ./package.json) version;
 
   src = ./.;
