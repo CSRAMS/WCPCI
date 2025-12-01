@@ -17,17 +17,14 @@ use crate::{
 use super::sessions::Session;
 
 #[derive(Debug, Clone, Serialize, FromFormField)]
+#[derive(Default)]
 pub enum ColorScheme {
     Light,
     Dark,
+    #[default]
     UseSystem,
 }
 
-impl Default for ColorScheme {
-    fn default() -> Self {
-        Self::UseSystem
-    }
-}
 
 impl From<String> for ColorScheme {
     fn from(s: String) -> Self {
