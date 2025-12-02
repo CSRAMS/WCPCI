@@ -179,7 +179,7 @@ name = "TypeScript / JavaScript"
 default_code = """
 console.log("Hello, World!");
 """
-monaco_contribution = "typescript"
+monaco_contribution = "javascript"
 
 [run.languages.typescript.runner]
 file_name = "index.ts"

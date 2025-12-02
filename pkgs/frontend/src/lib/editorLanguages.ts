@@ -14,17 +14,19 @@ import { r } from "codemirror-lang-r";
 import { type Extension } from "@codemirror/state";
 
 export default {
-    javascript,
-    python,
-    go,
-    java,
-    php,
-    cpp,
-    rust,
-    julia,
-    clojure,
-    csharp,
-    zig,
-    haskell,
-    r
+	javascript,
+	"typescript": javascript,
+	python,
+	go,
+	java,
+	php,
+	"c": cpp,
+	cpp,
+	rust,
+	julia,
+	clojure,
+	csharp,
+	zig,
+	haskell,
+	r
 } as Record<string, () => Extension>;

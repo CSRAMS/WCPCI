@@ -38,8 +38,9 @@ export default (
 
     const setLanguage = (lang: LanguageDisplayInfo) => {
         if (editor) {
+            const exts = editorLanguages[lang.monacoContribution] ? [editorLanguages[lang.monacoContribution]()] : [];
             editor.dispatch({
-                effects: languageCompartment.reconfigure(editorLanguages[lang.monacoContribution]())
+                effects: languageCompartment.reconfigure(exts)
             });
         }
     };
@@ -83,14 +84,14 @@ export default (
 
     const [storedCode, storedLang] = JSON.parse(
         window.localStorage.getItem(`contest-${contestId}-problem-${problemId}-code`) ??
-            "[null, null]"
+        "[null, null]"
     );
 
     currentLanguage = Object.keys(codeInfo).includes(storedLang ?? "")
         ? storedLang
         : mostRecentCode && Object.keys(codeInfo).includes(mostRecentCode[1])
-          ? mostRecentCode[1]
-          : defaultLanguage;
+            ? mostRecentCode[1]
+            : defaultLanguage;
 
     const langInfo = codeInfo[currentLanguage];
 
@@ -131,6 +132,8 @@ export default (
         "&": { height: "100%", width: "100%", overflow: "auto" }
     });
 
+    const exts = editorLanguages[langInfo.monacoContribution] ? [editorLanguages[langInfo.monacoContribution]()] : [];
+
     const state = EditorState.create({
         extensions: [
             baseExt,
@@ -140,7 +143,7 @@ export default (
                 if (!update.docChanged) return;
                 onDocChanged();
             }),
-            languageCompartment.of(editorLanguages[langInfo.monacoContribution]())
+            languageCompartment.of(exts)
         ],
         doc: storedCode ?? mostRecentCode?.[0] ?? langInfo.defaultCode
     });
