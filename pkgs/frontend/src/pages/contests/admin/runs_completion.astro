@@ -26,7 +26,7 @@ import { variable } from "@/lib/tera";
                 "Completions",
                 `/contests/${variable("contest.id")}/admin/runs/problems/${variable("problem.slug")}`
             ],
-            [variable("user.email"), ""]
+            [variable("target_user.email"), ""]
         ]}
     />
     <Title
